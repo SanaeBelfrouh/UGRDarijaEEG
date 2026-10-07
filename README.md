@@ -120,8 +120,7 @@ for the pharyngeal consonant /ʕ/.
 
 \* Darija admits consonant-nucleus syllables, so the syllabification of `dwa`,
 `lma`, `lla` and `tbib` depends on speech rate. The annotation used here is
-encoded in `src/darija/contrasts.py` (`WORD_FEATURES`) and was reviewed by native
-speakers acting as language consultants.
+encoded in `src/darija/contrasts.py` (`WORD_FEATURES`).
 
 ### 2.3 Trial structure
 
