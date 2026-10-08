@@ -78,6 +78,33 @@ COULEURS = {
     "repere":   "#8a8984",
 }
 
+#: Libelles anglais des figures. Le code et les CSV gardent leurs noms internes
+#: (francais) ; seul ce qui s'affiche est traduit.
+LIBELLES = {
+    "articule": "articulated", "imagine": "imagined",
+    "loso": "leave-one-session-out", "within_session": "within session",
+    "subblock": "grouped by sub-block", "pooled_blocked": "pooled blocked",
+    "puissance_lda": "power + LDA", "puissance_logreg": "power + logistic",
+    "csp_lda": "CSP + LDA", "cov_mdm": "cov. MDM",
+    "cov_tangent": "TS + logistic", "cov_tangent_lda": "TS + sLDA",
+    "bankcov_tangent": "FB-TS + logistic", "bankcov_tangent_lda": "FB-TS + sLDA",
+    "augcov_tangent": "delay-TS + logistic", "xdawn_tangent_lda": "xDAWN-TS + sLDA",
+    "complet": "full", "sans_machoire": "no jaw/occiput", "machoire10": "jaw ring",
+    "peripherique14": "peripheral (14)",
+    "syllabes": "syllables", "pharyngale": "pharyngeal", "semantique": "semantic",
+    "mots15": "15 words", "attaque": "onset", "oui_non": "yes / no",
+    "onset_voiced": "onset voicing", "cue_length": "cue length",
+    "avant": "pre-production", "isi": "ISI", "iti": "ITI",
+}
+#: barres du panneau (c) de la figure 3 : montage et nombre d'electrodes
+LIBELLES_BARRES = {"complet": "full montage (60)", "machoire10": "jaw ring (10)",
+                   "sans_machoire": "no jaw/occiput (46)", "occipital": "occipital (8)"}
+
+
+def lib(x) -> str:
+    return LIBELLES.get(str(x), str(x))
+
+
 #: formes et traits distincts, pour que la figure survive a une impression en gris
 MARQUEURS = ("o", "s", "^", "D", "v", "P", "X", "*", "<", ">")
 TRAITS = ("-", "--", "-.", ":")
@@ -108,10 +135,10 @@ def bornes(n_trials: int, n_classes: int) -> dict[str, float]:
 
 
 def trace_bornes(ax, b: dict[str, float], horizontal: bool = True) -> None:
-    style = (("hasard", ":", "hasard"),
-             ("significativite", "-.", "significativite"),
-             ("mde80", "--", "detectabilite 80 %"),
-             ("mde95", "-", "detectabilite 95 %"))
+    style = (("hasard", ":", "chance"),
+             ("significativite", "-.", "significance"),
+             ("mde80", "--", "detectability 80 %"),
+             ("mde95", "-", "detectability 95 %"))
     for cle, trait, etiquette in style:
         v = b[cle]
         if not np.isfinite(v):
@@ -148,8 +175,8 @@ def fig_protocole(res: Path, out: Path) -> str | None:
     bas = fig.add_subplot(2, 1, 2)
 
     # (a) schema d'un essai, dessine plutot que trace
-    etapes = [("fixation", 1.27, "0.85"), ("indice", 1.00, "0.65"),
-              ("ISI\naleatoire", 1.00, "0.45"), ("production\n2,0 s fixe", 2.00, "0.25"),
+    etapes = [("fixation", 1.27, "0.85"), ("cue", 1.00, "0.65"),
+              ("ISI\nrandom", 1.00, "0.45"), ("production\n2.0 s fixed", 2.00, "0.25"),
               ("ITI", 0.50, "0.75")]
     x = 0.0
     for nom, duree, couleur in etapes:
@@ -161,7 +188,7 @@ def fig_protocole(res: Path, out: Path) -> str | None:
                  lw=1.2, ls="--")
     haut.text(etapes[0][1] + etapes[1][1] + etapes[2][1], 0.42, " go, t = 0",
               fontsize=7.5, va="bottom")
-    haut.set(xlim=(0, x), ylim=(-0.45, 0.65), yticks=[], xlabel="temps (s)")
+    haut.set(xlim=(0, x), ylim=(-0.45, 0.65), yticks=[], xlabel="time (s)")
     haut.text(-0.02, 1.0, "a", transform=haut.transAxes, fontweight="bold",
               ha="right", va="top")
 
@@ -184,19 +211,19 @@ def fig_protocole(res: Path, out: Path) -> str | None:
             # sous le bord de la barre puisqu'il tombe au meme endroit
             bas.plot([attendu], [i], marker="|", ms=13, color="white",
                      mew=1.8, lw=0, zorder=5)
-    bas.set(yticks=y, yticklabels=presents, xscale="log",
-            xlabel="ecart-type mesure (ms, echelle log)")
+    bas.set(yticks=y, yticklabels=[lib(c) for c in presents], xscale="log",
+            xlabel="measured standard deviation (ms, log scale)")
     bas.set_xlim(0.5, max(sds) * 4)
     bas.invert_yaxis()
     from matplotlib.patches import Patch
     from matplotlib.lines import Line2D
     bas.legend(handles=[
         Patch(facecolor=COULEURS["articule"], edgecolor="black", lw=0.6,
-              label="gigue voulue par le protocole"),
+              label="jitter intended by the protocol"),
         Patch(facecolor=COULEURS["neutre"], edgecolor="black", lw=0.6,
-              label="pilote par l'horloge"),
+              label="driven by the software clock"),
         Line2D([], [], marker="|", ls="", color="0.2", mew=1.8, ms=10,
-               label="ecart-type attendu du tirage uniforme"),
+               label="expected SD of the uniform draw"),
     ], frameon=False, fontsize=7, loc="lower right")
     bas.text(-0.02, 1.0, "b", transform=bas.transAxes, fontweight="bold",
              ha="right", va="top")
@@ -250,11 +277,11 @@ def fig_principal(res: Path, out: Path) -> str | None:
             ax.errorbar(sub.equilibree.values, y, xerr=err, fmt=marq,
                         ms=5.0, lw=0, elinewidth=0.9, capsize=2,
                         mfc=c if cond == "articule" else "white",
-                        mec=c, mew=1.2, ecolor=c, label=cond, zorder=3)
-        ax.set(yticks=range(len(modeles)), xlabel="exactitude equilibree",
-               title=sch, ylim=(-0.6, len(modeles) - 0.4))
+                        mec=c, mew=1.2, ecolor=c, label=lib(cond), zorder=3)
+        ax.set(yticks=range(len(modeles)), xlabel="balanced accuracy",
+               title=lib(sch), ylim=(-0.6, len(modeles) - 0.4))
         ax.set_xlim(left=0.0)
-    axes[0].set_yticklabels(modeles)
+    axes[0].set_yticklabels([lib(m) for m in modeles])
     axes[0].tick_params(axis="y", labelsize=7.5)
     # une seule legende, dedupliquee
     h, l = axes[0].get_legend_handles_labels()
@@ -308,10 +335,11 @@ def fig_controles(res: Path, out: Path) -> str | None:
                 ax.scatter([xpos] * len(sub), sub.equilibree, marker=marq, s=30,
                            facecolor="white" if "avant" in fen else c,
                            edgecolor=c, lw=1.2, zorder=3)
-                etiquettes.append(f"{cond[:4]}\n{'avant' if 'avant' in fen else 'prod.'}")
+                etiquettes.append(f"{'artic.' if cond == 'articulated' else 'imag.'}\n"
+                                  f"{'pre' if 'avant' in fen else 'prod.'}")
                 xpos += 1
         ax.set(xticks=range(len(etiquettes)), xticklabels=etiquettes,
-               ylabel="exactitude equilibree")
+               ylabel="balanced accuracy")
         ax.set_ylim(0.0, max(0.5, d.equilibree.max() * 1.1))
     ax.text(-0.02, 1.02, "a", transform=ax.transAxes, fontweight="bold",
             ha="right", va="bottom")
@@ -344,12 +372,12 @@ def fig_controles(res: Path, out: Path) -> str | None:
         for h, mont in hauteurs:
             if precedent is not None and precedent - h < mini:
                 h = precedent - mini
-            ax.annotate(mont, (1.03, h), fontsize=7, va="center",
+            ax.annotate(lib(mont), (1.03, h), fontsize=7, va="center",
                         fontweight="bold" if mont == "occipital" else "normal")
             precedent = h
         trace_bornes(ax, b)
-        ax.set(xticks=[0, 1], xticklabels=["inter-sessions", "intra-session"],
-               ylabel="exactitude equilibree", xlim=(-0.15, 1.5))
+        ax.set(xticks=[0, 1], xticklabels=["across sessions", "within session"],
+               ylabel="balanced accuracy", xlim=(-0.15, 1.5))
     ax.text(-0.02, 1.02, "b", transform=ax.transAxes, fontweight="bold",
             ha="right", va="bottom")
 
@@ -381,8 +409,10 @@ def fig_controles(res: Path, out: Path) -> str | None:
         ax.barh(range(len(d)), d.apport, color=couleurs, edgecolor="black", lw=0.6)
         ax.axvline(0, color="black", lw=0.8)
         ax.set(yticks=range(len(d)),
-               yticklabels=[f"{r.condition[:4]} · {r.montage}" for _, r in d.iterrows()],
-               xlabel="apport de xDAWN (points d'exactitude)")
+               yticklabels=[("imagined, " if r.condition == "imagine" else "")
+                            + LIBELLES_BARRES.get(r.montage, lib(r.montage))
+                            for _, r in d.iterrows()],
+               xlabel="xDAWN gain (accuracy points)")
         for i, (_, r) in enumerate(d.iterrows()):
             if not r.significatif:
                 ax.text(r.apport, i, " n.s.", fontsize=6.5, va="center")
@@ -416,12 +446,13 @@ def fig_rang(res: Path, out: Path) -> str | None:
                 color=COULEURS["articule" if i == 0 else "imagine"],
                 ls="-" if port == "global" else "--",
                 mfc="none" if port != "global" else None,
-                label=f"{sch}, base {port}")
+                label=f"{'LOSO' if sch == 'loso' else 'sub-block' if sch == 'subblock' else lib(sch)}, "
+                      f"{'pooled basis' if port == 'global' else 'per-session'}")
     ax.axvline(32, color="0.5", lw=0.8, ls=":")
-    ax.annotate("rang employe ailleurs\ndans l'article", (32, ax.get_ylim()[0]),
+    ax.annotate("rank used elsewhere\nin the paper", (32, ax.get_ylim()[0]),
                 fontsize=6.5, ha="center", va="bottom",
                 textcoords="offset points", xytext=(0, 4))
-    ax.set(xlabel="rang retenu", ylabel="exactitude equilibree",
+    ax.set(xlabel="retained rank", ylabel="balanced accuracy",
            xticks=sorted(set(t.rang)))
 
     # second axe : la dimension de l'espace tangent, qui explique la decroissance
@@ -431,7 +462,7 @@ def fig_rang(res: Path, out: Path) -> str | None:
     sec.set(xticks=rangs,
             xticklabels=[f"{r * (r + 1) // 2 * 4:,}".replace(",", " ")
                          for r in rangs])
-    sec.set_xlabel("dimensions de l'espace tangent (banc de 4 bandes)")
+    sec.set_xlabel("tangent-space dimensions (4-band filter bank)")
     sec.tick_params(labelsize=7)
     sec.spines["top"].set_visible(True)
 
@@ -465,10 +496,10 @@ def fig_contrastes(res: Path, out: Path) -> str | None:
         ax.scatter(i + jitter[survit.values], sub.ecart[survit.values],
                    marker="D", s=40, facecolor=COULEURS["articule"],
                    edgecolor="black", lw=0.6, zorder=4,
-                   label="survit a Holm" if i == 0 else None)
-    ax.set(xticks=range(len(ordre)), xticklabels=list(ordre),
-           ylabel="exactitude equilibree moins son propre seuil")
-    ax.annotate("au-dessus du seuil de detectabilite", (-0.45, 0),
+                   label="survives Holm" if i == 0 else None)
+    ax.set(xticks=range(len(ordre)), xticklabels=[lib(c) for c in ordre],
+           ylabel="balanced accuracy minus its own bound")
+    ax.annotate("above the detectability bound", (-0.45, 0),
                 fontsize=7, va="bottom", ha="left", color="0.3",
                 textcoords="offset points", xytext=(0, 4))
     h, l = ax.get_legend_handles_labels()
@@ -508,7 +539,7 @@ def fig_rsa(res: Path, out: Path) -> str | None:
         ax.set_xticklabels(labels, rotation=90, fontsize=5.5)
         ax.set_yticklabels(labels, fontsize=5.5)
         moy = float(np.nanmean(m[np.tril_indices(len(labels), -1)]))
-        ax.set_xlabel(f"{cond}, dissimilarite moyenne {moy:+.2f}", fontsize=8)
+        ax.set_xlabel(f"{cond}, mean dissimilarity {moy:+.2f}", fontsize=8)
         plt.colorbar(im, ax=ax, fraction=0.046)
         if j == 0:
             ax.text(-0.25, 1.02, "a", transform=ax.transAxes, fontweight="bold",
@@ -530,7 +561,8 @@ def fig_rsa(res: Path, out: Path) -> str | None:
                     ax.text(rho, y[k] + (j - 0.5) * 0.38, "*", fontsize=9,
                             va="center")
         ax.axvline(0, color="black", lw=0.8)
-        ax.set(yticks=y, yticklabels=modeles, xlabel="rho de Spearman (Mantel)")
+        ax.set(yticks=y, yticklabels=[lib(m) for m in modeles],
+               xlabel="Spearman's rho (Mantel)")
         ax.tick_params(labelsize=7)
         ax.legend(frameon=False, fontsize=7, loc="lower right")
         ax.text(-0.02, 1.02, "b", transform=ax.transAxes, fontweight="bold",
@@ -586,11 +618,11 @@ def fig_topo(res: Path, out: Path) -> str | None:
             # le detail chiffre va SOUS la tete : au-dessus, deux titres de
             # trois lignes se touchent des que les panneaux se resserrent
             ax.annotate(f"max {best.equilibree:.3f} ({best.electrode})\n"
-                        f"{len(surligne)} electrode(s) apres Holm",
+                        f"{len(surligne)} electrode{'' if len(surligne) == 1 else 's'} after Holm",
                         (0.5, -0.01), xycoords="axes fraction", ha="center",
                         va="top", fontsize=7.5)
             if ci == 0:
-                ax.annotate(fen, (-0.04, 0.5), xycoords="axes fraction",
+                ax.annotate(lib(fen), (-0.04, 0.5), xycoords="axes fraction",
                             rotation=90, ha="right", va="center", fontsize=9)
     if im is None:
         return "aucune carte tracee"
@@ -599,10 +631,10 @@ def fig_topo(res: Path, out: Path) -> str | None:
                         wspace=0.06, hspace=0.22)
     cax = fig.add_axes([0.87, 0.18, 0.022, 0.62])
     cb = fig.colorbar(im, cax=cax)
-    cb.set_label("exactitude equilibree, une electrode seule", fontsize=8,
+    cb.set_label("balanced accuracy, single electrode", fontsize=8,
                  labelpad=2)
     cb.ax.axhline(seuil, color=COULEURS["occipital"], lw=1.6)
-    cb.ax.annotate("seuil de\ndetectabilite", (-0.6, seuil),
+    cb.ax.annotate("detectability\nbound", (-0.6, seuil),
                    xycoords=("axes fraction", "data"), fontsize=7,
                    va="center", ha="right", color=COULEURS["occipital"])
     fig.savefig(out / "fig7-topomaps.pdf")
