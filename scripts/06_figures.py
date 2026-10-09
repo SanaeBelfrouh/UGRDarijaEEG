@@ -474,40 +474,73 @@ def fig_rang(res: Path, out: Path) -> str | None:
 
 
 # ------------------------------------------------------------------ figure 5
+#: nombre de classes de chaque contraste, affiche sous son nom
+CLASSES_CONTRASTE = {"syllabes": 2, "pharyngale": 2, "semantique": 6, "mots15": 15,
+                     "attaque": 7, "oui_non": 2}
+NOMS_CONTRASTE = {"syllabes": "syllable count", "pharyngale": "pharyngeal /\u0295/",
+                  "semantique": "semantic category", "mots15": "word identity",
+                  "attaque": "onset class", "oui_non": "yes / no"}
+
+
+def trace_contrastes(t: pd.DataFrame, chemin: Path) -> None:
+    """Une ligne par contraste, une marque par configuration evaluee.
+
+    L'abscisse est l'exactitude equilibree moins le seuil de detectabilite du
+    contraste, en points : chaque contraste a son propre hasard et son propre
+    seuil, et cet ecart les ramene sur un axe commun dont zero est la borne.
+    Trois niveaux de lecture : creux sous la borne, plein au-dessus, losange
+    bleu pour ce qui survit a Holm. Le decompte a droite dit la meme chose en
+    chiffres, pour qui lit la figure imprimee en gris.
+    """
+    t = t.assign(pts=100 * t.ecart,
+                 holm=t.get("significatif_holm", False))
+    ordre = list(t.groupby("contraste").pts.max().sort_values(ascending=False).index)
+    fig, ax = plt.subplots(figsize=(6.6, 3.3))
+    ax.axvline(0, color="black", lw=1.0, zorder=1)
+    for i, c in enumerate(ordre):
+        sub = t[t.contraste == c].sort_values("pts")
+        # nuage en essaim : decalage vertical deterministe, alterne autour de la ligne
+        rang = np.arange(len(sub))
+        dy = ((rang % 5) - 2) * 0.09
+        y = i + dy
+        dessus = (sub.pts > 0).values
+        holm = sub.holm.astype(bool).values
+        ax.scatter(sub.pts[~dessus], y[~dessus], s=14, marker="o", facecolor="white",
+                   edgecolor=COULEURS["neutre"], lw=0.6, zorder=2,
+                   label="below the bound" if i == 0 else None)
+        ax.scatter(sub.pts[dessus & ~holm], y[dessus & ~holm], s=16, marker="o",
+                   facecolor=COULEURS["neutre"], edgecolor=COULEURS["neutre"], lw=0.6,
+                   zorder=3, label="above the bound" if i == 0 else None)
+        # les survivants a Holm sont ecartes verticalement pour ne pas se masquer
+        yh = i + (np.arange(holm.sum()) - (holm.sum() - 1) / 2) * 0.2
+        ax.scatter(sub.pts[holm], yh, s=46, marker="D",
+                   facecolor=COULEURS["articule"], edgecolor="black", lw=0.6, zorder=4,
+                   label="survives Holm correction" if i == 0 else None)
+        ax.text(1.01, i, f"{int(dessus.sum())} / {len(sub)} above",
+                transform=ax.get_yaxis_transform(), va="center", ha="left",
+                fontsize=7.5, color="0.25")
+    ax.set_yticks(range(len(ordre)))
+    ax.set_yticklabels([f"{NOMS_CONTRASTE.get(c, lib(c))}\n"
+                        f"{CLASSES_CONTRASTE.get(c, '?')} classes" for c in ordre],
+                       fontsize=8, linespacing=1.15)
+    ax.set_ylim(len(ordre) - 0.5, -0.5)
+    ax.set_xlabel("balanced accuracy minus detectability bound (percentage points)")
+    ax.tick_params(axis="y", length=0)
+    ax.text(0, -0.58, "detectability bound", ha="center", va="bottom", fontsize=7.5)
+    ax.legend(frameon=False, fontsize=7.5, loc="lower left", bbox_to_anchor=(0, 1.06),
+              ncol=3, handletextpad=0.3, columnspacing=1.2, borderaxespad=0)
+    fig.tight_layout()
+    fig.savefig(chemin)
+    plt.close(fig)
+
+
 def fig_contrastes(res: Path, out: Path) -> str | None:
     src = res / "imagine_grille.csv"
     if not src.exists():
         return "imagine_grille.csv absent"
     t = pd.read_csv(src)
-    # chaque contraste a son propre hasard et son propre seuil : tracer brut est
-    # illisible. On trace l'ecart au seuil, ce qui ramene tout sur un axe commun.
     t = t.assign(ecart=t.equilibree - t.seuil_eq)
-    ordre = (t.groupby("contraste").ecart.max().sort_values(ascending=False).index)
-
-    fig, ax = plt.subplots(figsize=(7.2, 4.2))
-    ax.axhline(0, color="black", lw=1.0)
-    for i, c in enumerate(ordre):
-        sub = t[t.contraste == c]
-        jitter = np.linspace(-0.22, 0.22, len(sub))
-        survit = sub.get("significatif_holm", pd.Series(False, index=sub.index)).astype(bool)
-        ax.scatter(i + jitter[~survit.values], sub.ecart[~survit.values],
-                   marker="o", s=16, facecolor="white",
-                   edgecolor=COULEURS["neutre"], lw=0.6, zorder=2)
-        ax.scatter(i + jitter[survit.values], sub.ecart[survit.values],
-                   marker="D", s=40, facecolor=COULEURS["articule"],
-                   edgecolor="black", lw=0.6, zorder=4,
-                   label="survives Holm" if i == 0 else None)
-    ax.set(xticks=range(len(ordre)), xticklabels=[lib(c) for c in ordre],
-           ylabel="balanced accuracy minus its own bound")
-    ax.annotate("above the detectability bound", (-0.45, 0),
-                fontsize=7, va="bottom", ha="left", color="0.3",
-                textcoords="offset points", xytext=(0, 4))
-    h, l = ax.get_legend_handles_labels()
-    if h:
-        ax.legend(frameon=False, loc="lower left", fontsize=7)
-    fig.tight_layout()
-    fig.savefig(out / "fig5-contrasts.pdf")
-    plt.close(fig)
+    trace_contrastes(t, out / "fig5-contrasts.pdf")
     return None
 
 
