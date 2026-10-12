@@ -74,37 +74,64 @@ def analyse_session(streams, session: str) -> tuple[dict, list[dict], dict]:
     return row, audio_rows, curves
 
 
+# sessions : deux familles de teinte (S001-S004 vert d'eau, S005-S008 violet),
+# du clair au fonce dans l'ordre d'enregistrement. Huit teintes distinctes ne se
+# distinguent pas deux a deux quand les courbes se superposent ; ce codage reste
+# lisible et distinct de l'orange et du bleu des conditions (panneaux c et d).
+SESSION_COLORS = ["#4fbf9f", "#26a283", "#147f64", "#0b5a47",
+                  "#b3a8f0", "#8a78e6", "#6250d6", "#3f2fa6"]
+
+
 def figure(curves: dict, audio, out: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    ink, muted = "#1a1a19", COULEURS["repere"]
     plt.rcParams.update({"font.size": 8, "axes.spines.top": False,
-                         "axes.spines.right": False, "pdf.fonttype": 42})
-    fig, ax = plt.subplots(1, 4, figsize=(10.5, 2.8))
-    grey = plt.cm.Greys(np.linspace(0.45, 0.95, len(curves)))
-    for (ses, c), g in zip(sorted(curves.items()), grey):
+                         "axes.spines.right": False, "pdf.fonttype": 42,
+                         "axes.edgecolor": muted, "xtick.color": ink,
+                         "ytick.color": ink, "axes.labelcolor": ink})
+    fig, ax = plt.subplots(2, 2, figsize=(7.2, 5.6), layout="constrained")
+    ax = ax.ravel()
+    fig.get_layout_engine().set(h_pad=0.08, w_pad=0.08, hspace=0.06, wspace=0.06)
+    above = dict(loc="lower left", bbox_to_anchor=(0.0, 1.03), frameon=False,
+                 fontsize=7, handlelength=1.6, columnspacing=1.0, borderaxespad=0)
+    for k, (ses, c) in enumerate(sorted(curves.items())):
+        col = SESSION_COLORS[k % len(SESSION_COLORS)]
         m = (c["freqs"] >= 1) & (c["freqs"] <= 60)
-        ax[0].semilogy(c["freqs"][m], c["psd"][m], color=g, lw=0.9, label=ses)
-        ax[1].plot(1000 * c["times"], c["erp"], color=g, lw=0.9)
+        ax[0].semilogy(c["freqs"][m], c["psd"][m], color=col, lw=1.2, label=ses)
+        ax[1].plot(1000 * c["times"], c["erp"], color=col, lw=1.2)
     ax[0].set(xlabel="frequency (Hz)", ylabel="median PSD ($\\mu$V$^2$/Hz)")
-    ax[0].legend(frameon=False, fontsize=6, ncol=2)
-    ax[1].axvline(0, color=COULEURS["repere"], lw=0.7)
-    ax[1].axhline(0, color=COULEURS["repere"], lw=0.5)
+    # legende des sessions au-dessus de la figure, hors des donnees (a et b)
+    h, l = ax[0].get_legend_handles_labels()
+    fig.legend(h, l, ncol=len(l), loc="outside upper center", frameon=False,
+               fontsize=7, handlelength=1.6, columnspacing=1.2)
+    ax[1].axvline(0, color=muted, lw=0.7)
+    ax[1].axhline(0, color=muted, lw=0.5)
     ax[1].set(xlabel="time from word onset (ms)", ylabel="occipital ERP ($\\mu$V)")
     if len(audio):
         bins = np.linspace(audio.rise_db.min(), audio.rise_db.max(), 50)
+        art = audio.loc[audio.cond == "articulated", "rise_db"].values
         for cond in ("imagined", "articulated"):
             v = audio.loc[audio.cond == cond, "rise_db"].values
-            ax[2].hist(v, bins=bins, color=COULEURS[cond], alpha=0.75, label=cond)
+            ax[2].hist(v, bins=bins, color=COULEURS[cond], edgecolor="white",
+                       linewidth=0.4, label=cond)
+        thr = float(np.percentile(art, 5))
+        ax[2].axvline(thr, color=ink, lw=0.8, ls="--",
+                      label=f"articulated 5th pct. ({thr:.1f} dB)")
         ax[2].set(xlabel="production minus fixation level (dB)", ylabel="trials")
-        ax[2].legend(frameon=False)
-        on = audio.loc[audio.cond == "articulated", "onset_s"].dropna().values
-        ax[3].hist(1000 * on, bins=40, color=COULEURS["articulated"])
+        ax[2].legend(ncol=3, **above)
+        on = 1000 * audio.loc[audio.cond == "articulated", "onset_s"].dropna().values
+        ax[3].hist(on, bins=40, color=COULEURS["articulated"], edgecolor="white",
+                   linewidth=0.4)
+        ax[3].axvline(np.median(on), color=ink, lw=0.8, ls="--",
+                      label=f"median {np.median(on):.0f} ms")
         ax[3].set(xlabel="speech onset after go (ms)", ylabel="articulated trials")
+        ax[3].legend(**above)
     for a, l in zip(ax, "abcd"):
-        a.text(-0.02, 1.04, l, transform=a.transAxes, fontweight="bold", ha="right")
-    fig.tight_layout()
+        a.set_title(l, loc="left", fontweight="bold", fontsize=9, x=-0.14, y=1.0,
+                    pad=4)
     out.mkdir(parents=True, exist_ok=True)
     fig.savefig(out / "fig8-technical-validation.pdf", bbox_inches="tight")
     plt.close(fig)
