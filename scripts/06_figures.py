@@ -170,68 +170,80 @@ def fig_protocole(res: Path, out: Path) -> str | None:
     if not presents:
         return "aucune colonne d'intervalle dans timing.csv"
 
-    fig = plt.figure(figsize=(7.0, 5.2))
-    haut = fig.add_subplot(2, 1, 1)
-    bas = fig.add_subplot(2, 1, 2)
+    sds = [t[c].dropna().std() * 1000 for c in presents]
+    dessine_protocole(dict(zip(presents, sds)), out)
+    return None
 
-    # (a) schema d'un essai, dessine plutot que trace
-    etapes = [("fixation", 1.27, "0.85"), ("cue", 1.00, "0.65"),
-              ("ISI\nrandom", 1.00, "0.45"), ("production\n2.0 s fixed", 2.00, "0.25"),
-              ("ITI", 0.50, "0.75")]
+
+def dessine_protocole(sds: dict[str, float], out: Path) -> None:
+    """Figure 1, a partir de l'ecart-type mesure (ms) de chaque intervalle.
+
+    Un seul codage pour les deux panneaux : bleu, intervalle tire au hasard par
+    le protocole ; gris, intervalle fixe pilote par l'horloge. Bleu et gris
+    different en teinte ET en luminance, donc restent separes en vision des
+    couleurs deficiente comme en niveaux de gris. La legende est au-dessus de la
+    figure, hors des donnees.
+    """
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+
+    voulu_c, fixe_c = COULEURS["articule"], COULEURS["neutre"]
+    fig = plt.figure(figsize=(7.0, 5.4), layout="constrained")
+    haut, bas = fig.subplots(2, 1, height_ratios=[1, 1.15])
+
+    # (a) schema d'un essai, dessine plutot que trace ; chaque phase porte la
+    # couleur de son intervalle dans le panneau (b)
+    etapes = [("fixation", 1.27, "fixation"), ("cue", 1.00, "cue"),
+              ("ISI\nrandom", 1.00, "isi"), ("production\n2.0 s fixed", 2.00, "production"),
+              ("ITI", 0.50, "iti")]
     x = 0.0
-    for nom, duree, couleur in etapes:
-        haut.barh(0, duree, left=x, height=0.5, color=couleur,
-                  edgecolor="black", lw=0.6)
-        haut.text(x + duree / 2, 0, nom, ha="center", va="center", fontsize=7.5)
+    for nom, duree, cle in etapes:
+        voulu = PRESCRIT[cle][0] == "uniforme"
+        haut.barh(0, duree, left=x, height=0.5, color=voulu_c if voulu else fixe_c,
+                  edgecolor="white", lw=1.5)
+        haut.text(x + duree / 2, 0, nom, ha="center", va="center", fontsize=7.5,
+                  color="white", fontweight="bold")
         x += duree
-    haut.axvline(etapes[0][1] + etapes[1][1] + etapes[2][1], color="black",
-                 lw=1.2, ls="--")
-    haut.text(etapes[0][1] + etapes[1][1] + etapes[2][1], 0.42, " go, t = 0",
-              fontsize=7.5, va="bottom")
+    go = etapes[0][1] + etapes[1][1] + etapes[2][1]
+    haut.axvline(go, color="#1a1a19", lw=1.2, ls="--")
+    haut.text(go, 0.42, " go, t = 0", fontsize=7.5, va="bottom")
     haut.set(xlim=(0, x), ylim=(-0.45, 0.65), yticks=[], xlabel="time (s)")
-    haut.text(-0.02, 1.0, "a", transform=haut.transAxes, fontweight="bold",
-              ha="right", va="top")
+    haut.spines["left"].set_visible(False)
+    haut.set_title("a", loc="left", fontweight="bold", fontsize=9, x=-0.02)
 
     # (b) ecart-type mesure, en millisecondes, sur un axe logarithmique.
     # Trace en secondes, les trois intervalles pilotes par l'horloge sont des
     # traits plats invisibles a cote des deux jitters voulus ; en echelle log
     # c'est justement leur rapport de 1 a 100 qui porte le message.
-    sds = [t[c].dropna().std() * 1000 for c in presents]
+    presents = list(sds)
     voulu = [PRESCRIT[c][0] == "uniforme" for c in presents]
     y = np.arange(len(presents))
-    bas.barh(y, sds, color=[COULEURS["articule"] if v else COULEURS["neutre"]
-                            for v in voulu],
-             edgecolor="black", lw=0.6, height=0.6)
-    for i, (c, sd, v) in enumerate(zip(presents, sds, voulu)):
+    bas.barh(y, [sds[c] for c in presents],
+             color=[voulu_c if v else fixe_c for v in voulu],
+             edgecolor="white", lw=1.0, height=0.6)
+    for i, c in enumerate(presents):
         forme, lo, hi = PRESCRIT[c]
         attendu = (hi - lo) / np.sqrt(12) * 1000 if forme == "uniforme" else None
-        bas.text(sd * 1.15, i, f"{sd:.2f} ms", va="center", fontsize=7.5)
+        bas.text(sds[c] * 1.15, i, f"{sds[c]:.2f} ms", va="center", fontsize=7.5)
         if attendu:
-            # trace EN BLANC sur la barre : pose a cote, le repere disparait
-            # sous le bord de la barre puisqu'il tombe au meme endroit
-            bas.plot([attendu], [i], marker="|", ms=13, color="white",
-                     mew=1.8, lw=0, zorder=5)
+            # trace a l'encre, au-dessus de la barre : il tombe a son extremite,
+            # ou un repere blanc disparaissait sur le fond
+            bas.plot([attendu], [i], marker="|", ms=15, color="#1a1a19",
+                     mew=2.0, lw=0, zorder=5)
     bas.set(yticks=y, yticklabels=[lib(c) for c in presents], xscale="log",
             xlabel="measured standard deviation (ms, log scale)")
-    bas.set_xlim(0.5, max(sds) * 4)
+    bas.set_xlim(0.5, max(sds.values()) * 4)
     bas.invert_yaxis()
-    from matplotlib.patches import Patch
-    from matplotlib.lines import Line2D
-    bas.legend(handles=[
-        Patch(facecolor=COULEURS["articule"], edgecolor="black", lw=0.6,
-              label="jitter intended by the protocol"),
-        Patch(facecolor=COULEURS["neutre"], edgecolor="black", lw=0.6,
-              label="driven by the software clock"),
-        Line2D([], [], marker="|", ls="", color="0.2", mew=1.8, ms=10,
-               label="expected SD of the uniform draw"),
-    ], frameon=False, fontsize=7, loc="lower right")
-    bas.text(-0.02, 1.0, "b", transform=bas.transAxes, fontweight="bold",
-             ha="right", va="top")
+    bas.set_title("b", loc="left", fontweight="bold", fontsize=9, x=-0.02)
 
-    fig.tight_layout()
+    fig.legend(handles=[
+        Patch(facecolor=voulu_c, label="jitter intended by the protocol"),
+        Patch(facecolor=fixe_c, label="driven by the software clock"),
+        Line2D([], [], marker="|", ls="", color="#1a1a19", mew=1.8, ms=10,
+               label="expected SD of the uniform draw"),
+    ], loc="outside upper center", ncol=3, frameon=False, fontsize=7)
     fig.savefig(out / "fig1-protocol-timing.pdf")
     plt.close(fig)
-    return None
 
 
 # ------------------------------------------------------------------ figure 2
@@ -608,6 +620,12 @@ def fig_rsa(res: Path, out: Path) -> str | None:
 
 
 # ------------------------------------------------------------------ figure 7
+#: Echelle sequentielle jaune -> vert -> bleu (ColorBrewer YlGnBu) : la clarte
+#: croit avec la valeur comme pour une teinte unique, et la teinte change en plus,
+#: ce qui rend les niveaux intermediaires lisibles, y compris en vision des
+#: couleurs deficiente. Un degrade d'un seul bleu se lisait mal.
+CARTE_TOPO = "YlGnBu"
+
 def fig_topo(res: Path, out: Path) -> str | None:
     src = res / "topo_electrodes.csv"
     if not src.exists():
@@ -643,7 +661,7 @@ def fig_topo(res: Path, out: Path) -> str | None:
             surligne = [i for i, r in enumerate(g.itertuples())
                         if bool(getattr(r, "significatif_holm", False))]
             im = draw_topomap(ax, g.equilibree.values, g[["x", "y"]].values,
-                              cmap="Blues", vmin=vmin, vmax=vmax,
+                              cmap=CARTE_TOPO, vmin=vmin, vmax=vmax,
                               surligne=surligne)
             best = g.loc[g.equilibree.idxmax()]
             if li == 0:
@@ -666,10 +684,11 @@ def fig_topo(res: Path, out: Path) -> str | None:
     cb = fig.colorbar(im, cax=cax)
     cb.set_label("balanced accuracy, single electrode", fontsize=8,
                  labelpad=2)
-    cb.ax.axhline(seuil, color=COULEURS["occipital"], lw=1.6)
+    # borne en encre et en pointille : elle ne depend d'aucune couleur
+    cb.ax.axhline(seuil, color="black", lw=1.6, ls=(0, (3.2, 1.6)))
     cb.ax.annotate("detectability\nbound", (-0.6, seuil),
                    xycoords=("axes fraction", "data"), fontsize=7,
-                   va="center", ha="right", color=COULEURS["occipital"])
+                   va="center", ha="right")
     fig.savefig(out / "fig7-topomaps.pdf")
     plt.close(fig)
     return None
