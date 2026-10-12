@@ -150,7 +150,7 @@ def main() -> int:
         print("aucun essai imagine au-dessus du seuil : rien a reecouter")
         return 0
     cols = ["session", "trial", "word", "rise_db", "peak_rise_db", "loud_s",
-            "first_event_s", "voiced_frac", "centroid_hz", "wav"]
+            "first_event_s", "lowfreq_share", "voiced_frac", "centroid_hz", "wav"]
     rev = pd.DataFrame(keep)[cols].sort_values(["session", "trial"])
     rev.to_csv(out / "audio_review.csv", index=False)
 
@@ -158,7 +158,7 @@ def main() -> int:
         v = series.dropna()
         return f"mediane {v.median():.2f} [{v.quantile(.05):.2f} a {v.quantile(.95):.2f}]"
     print("traits acoustiques, articules (mediane [5e a 95e centile]) :")
-    for c in ("loud_s", "first_event_s", "voiced_frac", "centroid_hz"):
+    for c in ("loud_s", "first_event_s", "lowfreq_share", "voiced_frac", "centroid_hz"):
         print(f"  {c:14s} {q(art[c])}")
     print("\nessais imagines suspects :")
     print(rev.drop(columns="wav").round(2).to_string(index=False))

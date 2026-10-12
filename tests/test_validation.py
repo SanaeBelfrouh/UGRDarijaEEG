@@ -142,6 +142,20 @@ def test_acoustic_features_tell_voice_from_a_click():
     assert abs(v["loud_s"] - 0.6) < 0.03 and v["voiced_frac"] > 0.9, v
     assert abs(v["first_event_s"] - 0.6) < 0.02, v
     assert k["loud_s"] < 0.06 and k["voiced_frac"] < 0.5, k
+    assert v["lowfreq_share"] < 0.1, v
+
+
+def test_low_frequency_thump_is_not_taken_for_voice():
+    """Non-regression : un choc grave passait pour voise, centroide a 25 Hz."""
+    from darija.validation import acoustic_features
+    rng = np.random.default_rng(2)
+    t = np.arange(int(2.0 * AF)) / AF
+    x = rng.normal(0, 1e-3, len(t))
+    m = (t > 0.6) & (t < 1.0)
+    x[m] += 0.3 * np.sin(2 * np.pi * 25 * t[m]) * np.hanning(m.sum())
+    f = acoustic_features(x, AF, 20 * np.log10(1e-3))
+    assert f["lowfreq_share"] > 0.8, f
+    assert f["voiced_frac"] < 0.5, f
 
 
 def test_audio_review_finds_and_extracts_a_planted_vocalisation():
