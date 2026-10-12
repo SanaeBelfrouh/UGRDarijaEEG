@@ -98,6 +98,7 @@ def test_cue_erp_peaks_where_it_was_planted():
     assert 0.09 <= rep.peak_latency_s <= 0.16, rep.peak_latency_s
     assert rep.peak_gfp_over_baseline > 2, rep.peak_gfp_over_baseline
     assert rep.split_half_r > 0.8, rep.split_half_r
+    assert 0.09 <= rep.p1_latency_s < 0.165, rep.p1_latency_s
 
 
 def test_audio_separates_conditions_and_finds_onset():

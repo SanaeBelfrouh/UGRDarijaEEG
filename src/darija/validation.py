@@ -155,6 +155,11 @@ class ErpReport:
     split_half_r: float              # correlation essais pairs / impairs, occipital
     n_trials: int
     channels_used: list[str] = field(default_factory=list)
+    #: latences des composantes occipitales. Le pic de GFP peut tomber sur P1 ou
+    #: sur N1 d'une session a l'autre quand leurs amplitudes sont proches : ces
+    #: latences, mesurees chacune dans sa fenetre, ne sautent pas de composante.
+    p1_latency_s: float = float("nan")
+    n1_latency_s: float = float("nan")
 
 
 def cue_erp(data: np.ndarray, stamps: np.ndarray, sfreq: float, ch_names,
@@ -184,9 +189,14 @@ def cue_erp(data: np.ndarray, stamps: np.ndarray, sfreq: float, ch_names,
     w = (times >= 0.06) & (times <= 0.25)
     k = np.flatnonzero(w)[np.argmax(gfp[w])]
     r = float(np.corrcoef(occ[0::2].mean(0), occ[1::2].mean(0))[0, 1])
-    return ErpReport(times, occ.mean(0), gfp, float(times[k]),
+    mean = occ.mean(0)
+    w1 = (times >= 0.09) & (times < 0.165)
+    w2 = (times >= 0.165) & (times <= 0.24)
+    p1 = float(times[w1][np.argmax(mean[w1])])
+    n1 = float(times[w2][np.argmin(mean[w2])])
+    return ErpReport(times, mean, gfp, float(times[k]),
                      float(gfp[k] / gfp[base].mean()), r, len(X),
-                     [ch_names[i] for i in idx])
+                     [ch_names[i] for i in idx], p1, n1)
 
 
 # ------------------------------------------------------------ 3-4. audio
