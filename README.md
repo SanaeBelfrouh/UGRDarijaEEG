@@ -77,7 +77,7 @@ python scripts/run_all.py --input <folder containing the .xdf files> --work <wor
 |---|---|
 | Language | Moroccan Arabic (Darija) |
 | Participants | 1 native speaker |
-| Sessions | 8 (recorded on different days) |
+| Sessions | 8 (recorded on different days, at least 24 h apart) |
 | Conditions | imagined speech, articulated (overt) speech |
 | Vocabulary | 15 words |
 | Repetitions | 15 per word, per condition, per session |
