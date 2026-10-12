@@ -74,12 +74,18 @@ def analyse_session(streams, session: str) -> tuple[dict, list[dict], dict]:
     return row, audio_rows, curves
 
 
-# sessions : deux familles de teinte (S001-S004 vert d'eau, S005-S008 violet),
-# du clair au fonce dans l'ordre d'enregistrement. Huit teintes distinctes ne se
-# distinguent pas deux a deux quand les courbes se superposent ; ce codage reste
-# lisible et distinct de l'orange et du bleu des conditions (panneaux c et d).
-SESSION_COLORS = ["#4fbf9f", "#26a283", "#147f64", "#0b5a47",
-                  "#b3a8f0", "#8a78e6", "#6250d6", "#3f2fa6"]
+# sessions : quatre teintes nettement distinctes (verifiees deux a deux, y compris
+# en vision des couleurs deficiente) ; S001-S004 en trait plein, S005-S008 en
+# pointille, de meme teinte une session sur quatre. Huit teintes ou des nuances
+# d'une meme teinte ne se distinguent pas quand les courbes se superposent. Le
+# bleu et l'orange restent reserves aux conditions (panneaux c et d).
+SESSION_COLORS = ["#6250d6", "#008300", "#eda100", "#e87ba4"]
+SESSION_DASH = (0, (4.0, 1.6))
+
+
+def session_style(k: int) -> dict:
+    return dict(color=SESSION_COLORS[k % 4],
+                ls="-" if k < 4 else SESSION_DASH, lw=1.4 if k < 4 else 1.5)
 
 
 def figure(curves: dict, audio, out: Path) -> None:
@@ -98,15 +104,20 @@ def figure(curves: dict, audio, out: Path) -> None:
     above = dict(loc="lower left", bbox_to_anchor=(0.0, 1.03), frameon=False,
                  fontsize=7, handlelength=1.6, columnspacing=1.0, borderaxespad=0)
     for k, (ses, c) in enumerate(sorted(curves.items())):
-        col = SESSION_COLORS[k % len(SESSION_COLORS)]
         m = (c["freqs"] >= 1) & (c["freqs"] <= 60)
-        ax[0].semilogy(c["freqs"][m], c["psd"][m], color=col, lw=1.2, label=ses)
-        ax[1].plot(1000 * c["times"], c["erp"], color=col, lw=1.2)
+        ax[0].semilogy(c["freqs"][m], c["psd"][m], label=ses, **session_style(k))
+        ax[1].plot(1000 * c["times"], c["erp"], **session_style(k))
     ax[0].set(xlabel="frequency (Hz)", ylabel="median PSD ($\\mu$V$^2$/Hz)")
     # legende des sessions au-dessus de la figure, hors des donnees (a et b)
+    # deux rangees : S001-S004 (plein) au-dessus de S005-S008 (pointille), la
+    # meme teinte dans la meme colonne ; matplotlib remplit par colonne
     h, l = ax[0].get_legend_handles_labels()
-    fig.legend(h, l, ncol=len(l), loc="outside upper center", frameon=False,
-               fontsize=7, handlelength=1.6, columnspacing=1.2)
+    half = (len(h) + 1) // 2
+    order = [i for pair in zip(range(half), range(half, len(h))) for i in pair]
+    order += [i for i in range(len(h)) if i not in order]
+    fig.legend([h[i] for i in order], [l[i] for i in order], ncol=half,
+               loc="outside upper center", frameon=False, fontsize=7,
+               handlelength=2.6, columnspacing=1.6)
     ax[1].axvline(0, color=muted, lw=0.7)
     ax[1].axhline(0, color=muted, lw=0.5)
     ax[1].set(xlabel="time from word onset (ms)", ylabel="occipital ERP ($\\mu$V)")
