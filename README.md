@@ -385,6 +385,9 @@ python scripts/05_paired_compare.py --predictions results/imagined.predictions.n
 
 # 6. Figures from the result CSVs
 python scripts/06_figures.py --results results
+#    optional: Figure 7 in the EEGLAB (topoplot) style, jet or red-blue scale
+python scripts/fig7_topomaps_eeglab.py --csv results/topo_electrodes.csv \
+    --out figures/fig7-topomaps.pdf --cmap jet        # or --cmap RdBu_r
 
 # 7. Per-electrode discriminability (scalp maps)
 python scripts/07_topomaps.py --epochs epochs.npz
