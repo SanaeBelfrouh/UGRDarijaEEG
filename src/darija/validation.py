@@ -247,6 +247,55 @@ def audio_levels(audio_stream, trials: list[Trial], *, onset_db: float = 15.0,
     return rows
 
 
+def acoustic_features(x: np.ndarray, sfreq: float, floor_db: float, *,
+                      event_db: float = 15.0) -> dict:
+    """Ce qui distingue de la parole un bruit de meme niveau.
+
+    Sur la fenetre de production d'un essai, par trames de 10 ms :
+
+    - ``loud_s`` : duree totale des trames a plus de ``event_db`` dB au-dessus du
+      plancher de l'essai (une toux ou un choc dure moins qu'un mot) ;
+    - ``first_event_s`` : instant de la premiere de ces trames apres le go ;
+    - ``voiced_frac`` : part des trames fortes qui sont voisees, c'est-a-dire dont
+      l'autocorrelation a un pic de plus de 0,5 entre 2,5 et 13,3 ms de retard
+      (75 a 400 Hz, la plage de la voix) ;
+    - ``centroid_hz`` : centroide spectral des trames fortes.
+    """
+    n = max(1, int(round(0.010 * sfreq)))
+    m = len(x) // n
+    frames = np.asarray(x[:m * n], dtype=np.float64).reshape(m, n)
+    db = 20 * np.log10(np.maximum(np.sqrt(np.mean(frames ** 2, axis=1)), 1e-12))
+    loud = db > floor_db + event_db
+    out = dict(loud_s=float(loud.sum() * 0.010),
+               first_event_s=float(np.argmax(loud) * 0.010) if loud.any() else np.nan,
+               peak_rise_db=float(db.max() - floor_db) if m else np.nan,
+               voiced_frac=np.nan, centroid_hz=np.nan)
+    if not loud.any():
+        return out
+    # voisement sur des trames de 40 ms centrees sur les trames fortes
+    w = int(round(0.040 * sfreq))
+    lo, hi = int(sfreq / 400), int(sfreq / 75)
+    voiced, cent = [], []
+    freqs = np.fft.rfftfreq(w, 1 / sfreq)
+    for k in np.flatnonzero(loud):
+        a = k * n
+        seg = np.asarray(x[a:a + w], dtype=np.float64)
+        if len(seg) < w:
+            continue
+        seg = seg - seg.mean()
+        ac = np.correlate(seg, seg, "full")[w - 1:]
+        if ac[0] <= 0:
+            continue
+        ac = ac / ac[0]
+        voiced.append(ac[lo:hi].max() > 0.5)
+        spec = np.abs(np.fft.rfft(seg * np.hanning(w))) ** 2
+        cent.append(float((freqs * spec).sum() / max(spec.sum(), 1e-20)))
+    if voiced:
+        out["voiced_frac"] = float(np.mean(voiced))
+        out["centroid_hz"] = float(np.median(cent))
+    return out
+
+
 def session_id(path) -> str:
     m = re.search(r"ses-(S\d+)", str(path))
     return m.group(1) if m else str(path).rsplit("/", 1)[-1].split(".")[0]
