@@ -56,6 +56,8 @@ def analyse_session(streams, session: str) -> tuple[dict, list[dict], dict]:
                n_outlier_channels=len(spec.outlier_channels),
                outlier_channels=" ".join(spec.outlier_channels),
                erp_peak_latency_ms=round(1000 * erp.peak_latency_s, 1),
+               erp_p1_latency_ms=round(1000 * erp.p1_latency_s, 1),
+               erp_n1_latency_ms=round(1000 * erp.n1_latency_s, 1),
                erp_peak_gfp_ratio=round(erp.peak_gfp_over_baseline, 2),
                erp_split_half_r=round(erp.split_half_r, 3),
                audio_stream=audio is not None)
@@ -151,6 +153,9 @@ def main() -> int:
           f"{t.line_noise_db.max():+.1f} dB au-dessus du voisinage")
     print(f"canaux hors norme par session : {t.n_outlier_channels.min()} a "
           f"{t.n_outlier_channels.max()}")
+    print(f"latence P1 occipitale : {t.erp_p1_latency_ms.min():.0f} a "
+          f"{t.erp_p1_latency_ms.max():.0f} ms ; N1 : {t.erp_n1_latency_ms.min():.0f} a "
+          f"{t.erp_n1_latency_ms.max():.0f} ms")
     print(f"pic du potentiel evoque : {t.erp_peak_latency_ms.min():.0f} a "
           f"{t.erp_peak_latency_ms.max():.0f} ms ; rapport a la ligne de base "
           f"{t.erp_peak_gfp_ratio.min():.1f} a {t.erp_peak_gfp_ratio.max():.1f} ; "
