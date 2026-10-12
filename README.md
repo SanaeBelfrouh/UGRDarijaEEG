@@ -241,7 +241,8 @@ UGRDarijaEEG/
 │   ├── 05_paired_compare.py  paired permutation tests between configurations
 │   ├── 06_figures.py         the 7 manuscript figures, from the result CSVs
 │   ├── 07_topomaps.py        per-electrode decoding for scalp maps
-│   └── 08_technical_validation.py  signal quality, cue-evoked response, audio (raw XDF)
+│   ├── 08_technical_validation.py  signal quality, cue-evoked response, audio (raw XDF)
+│   └── 09_audio_review.py    WAV clips + acoustic features of imagined trials with sound
 ├── tests/
 │   ├── test_pipeline.py      38 unit / integration tests (incl. positive & negative controls)
 │   ├── test_notebook.py      replays every run_all.py command on synthetic data
@@ -377,6 +378,10 @@ python scripts/07_topomaps.py --epochs epochs.npz
 #    spectrum per session, visual evoked response to the word cue, audio level
 #    of every trial (vocalisation check for imagined trials), speech onset
 python scripts/08_technical_validation.py --input /path/to/xdf --out results
+
+# 9. Imagined trials in which the microphone picked up sound: one WAV clip per
+#    trial (with reference clips) and acoustic features, to decide by listening
+python scripts/09_audio_review.py --input /path/to/xdf --out results/audio_review
 ```
 
 ### 6.1 Options of `01_build_epochs.py`

@@ -125,6 +125,57 @@ def test_script_runs_on_synthetic_session():
     assert row["imagined_rise_db_median"] < 3 < row["articulated_rise_db_median"]
 
 
+def test_acoustic_features_tell_voice_from_a_click():
+    from darija.validation import acoustic_features
+    rng = np.random.default_rng(1)
+    t = np.arange(int(2.0 * AF)) / AF
+    floor = rng.normal(0, 1e-3, len(t))
+    voice = floor.copy()
+    m = (t > 0.6) & (t < 1.2)
+    voice[m] += 0.2 * np.sin(2 * np.pi * 180 * t[m])          # 600 ms de voix a 180 Hz
+    click = floor.copy()
+    c = (t > 0.6) & (t < 0.64)
+    click[c] += 0.2 * rng.normal(size=c.sum())                # 40 ms de bruit large bande
+    fdb = 20 * np.log10(1e-3)
+    v = acoustic_features(voice, AF, fdb)
+    k = acoustic_features(click, AF, fdb)
+    assert abs(v["loud_s"] - 0.6) < 0.03 and v["voiced_frac"] > 0.9, v
+    assert abs(v["first_event_s"] - 0.6) < 0.02, v
+    assert k["loud_s"] < 0.06 and k["voiced_frac"] < 0.5, k
+
+
+def test_audio_review_finds_and_extracts_a_planted_vocalisation():
+    import importlib.util, tempfile, zipfile
+    import pyxdf
+    spec = importlib.util.spec_from_file_location(
+        "ar", Path(__file__).resolve().parents[1] / "scripts" / "09_audio_review.py")
+    ar = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ar)
+    streams, n = _streams()
+    mk, audio = streams[1], streams[2]
+    trials = trials_from_markers(mk)
+    k = 3                                                     # un essai imagine
+    assert trials[k].cond == "imagined"
+    ta = audio["time_stamps"]
+    m = (ta > trials[k].go + 0.4) & (ta < trials[k].go + 0.9)
+    audio["time_series"] = audio["time_series"].copy()
+    audio["time_series"][m, 0] += 0.6 * np.sin(2 * np.pi * 180 * ta[m])
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        ar.discover_xdf = lambda root: {"S001": tmp / "fake.xdf"}
+        pyxdf.load_xdf = lambda path, select_streams=None: ([streams[1], streams[2]], None)
+        sys.argv = ["09_audio_review.py", "--input", str(tmp), "--out", str(tmp / "review")]
+        assert ar.main() == 0
+        import pandas as pd
+        rev = pd.read_csv(tmp / "review" / "audio_review.csv")
+        assert rev.trial.tolist() == [k], rev
+        assert rev.voiced_frac.iloc[0] > 0.9 and abs(rev.first_event_s.iloc[0] - 0.4) < 0.02
+        names = zipfile.ZipFile(tmp / "audio_review.zip").namelist()
+        assert any("SUSPECT_t003" in x for x in names), names
+        assert any("REF-articulated" in x for x in names), names
+        assert any("REF-silent-imagined" in x for x in names), names
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
