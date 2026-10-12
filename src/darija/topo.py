@@ -200,16 +200,6 @@ def draw_topomap(ax, valeurs, xy, *, cmap="Blues", vmin=None, vmax=None,
                 color="black", lw=1.1, zorder=4)
 
     ax.scatter(xy[:, 0], xy[:, 1], s=5, c="black", zorder=5, linewidths=0)
-    # hors du cercle (FT9, FT10, TP9, TP10...) la carte n'affiche rien : chaque
-    # electrode y est donc un disque de la couleur de SA valeur, sans quoi la
-    # valeur la plus forte peut n'apparaitre nulle part
-    dehors = np.hypot(xy[:, 0], xy[:, 1]) > RAYON_TETE * 0.995
-    if dehors.any():
-        ax.scatter(xy[dehors, 0], xy[dehors, 1], s=30, c=valeurs[dehors],
-                   cmap=im.get_cmap(), norm=im.norm, edgecolors="black",
-                   linewidths=0.6, zorder=5)
-        ax.scatter(xy[dehors, 0], xy[dehors, 1], s=4, c="black", zorder=5.5,
-                   linewidths=0)
     for i in (surligne or ()):
         ax.scatter(xy[i, 0], xy[i, 1], s=42, facecolor="none",
                    edgecolor="black", lw=1.3, zorder=6)
