@@ -620,11 +620,27 @@ def fig_rsa(res: Path, out: Path) -> str | None:
 
 
 # ------------------------------------------------------------------ figure 7
-#: Echelle sequentielle jaune -> vert -> bleu (ColorBrewer YlGnBu) : la clarte
-#: croit avec la valeur comme pour une teinte unique, et la teinte change en plus,
-#: ce qui rend les niveaux intermediaires lisibles, y compris en vision des
-#: couleurs deficiente. Un degrade d'un seul bleu se lisait mal.
-CARTE_TOPO = "YlGnBu"
+#: Echelle divergente bleu -> blanc -> rouge (ColorBrewer RdBu), comme une carte
+#: de potentiel evoque, centree sur la borne de detectabilite : rouge au-dessus de
+#: ce que le corpus peut detecter, bleu en dessous. La demi-etendue est la meme
+#: des deux cotes, pour qu'un ecart sous la borne (du bruit) reste pale au lieu
+#: d'etre etire jusqu'au bleu fonce. RdBu reste lisible en vision des couleurs
+#: deficiente ; une echelle arc-en-ciel (jet) ne l'est pas.
+CARTE_TOPO = "RdBu_r"
+
+
+def carte_centree(nom: str, vmin: float, vmax: float, centre: float):
+    """La portion de l'echelle divergente couverte par [vmin, vmax].
+
+    Le centre de l'echelle tombe sur ``centre`` et la demi-etendue est l'ecart
+    maximal au centre ; la barre de couleur ne montre que la plage des donnees.
+    """
+    from matplotlib import colormaps
+    from matplotlib.colors import ListedColormap
+    demi = max(vmax - centre, centre - vmin)
+    a, b = 0.5 + (vmin - centre) / (2 * demi), 0.5 + (vmax - centre) / (2 * demi)
+    return ListedColormap(colormaps[nom](np.linspace(a, b, 256)))
+
 
 def fig_topo(res: Path, out: Path) -> str | None:
     src = res / "topo_electrodes.csv"
@@ -646,6 +662,7 @@ def fig_topo(res: Path, out: Path) -> str | None:
     # et effaceraient exactement ce qu'on veut montrer.
     vmin, vmax = float(t.equilibree.min()), float(t.equilibree.max())
     seuil = float(t.seuil_eq.iloc[0])
+    carte = carte_centree(CARTE_TOPO, vmin, vmax, seuil)
 
     nl, nc = len(fenetres), len(conditions)
     fig, axes = plt.subplots(nl, nc, figsize=(3.3 * nc + 1.1, 3.5 * nl),
@@ -661,7 +678,7 @@ def fig_topo(res: Path, out: Path) -> str | None:
             surligne = [i for i, r in enumerate(g.itertuples())
                         if bool(getattr(r, "significatif_holm", False))]
             im = draw_topomap(ax, g.equilibree.values, g[["x", "y"]].values,
-                              cmap=CARTE_TOPO, vmin=vmin, vmax=vmax,
+                              cmap=carte, vmin=vmin, vmax=vmax,
                               surligne=surligne)
             best = g.loc[g.equilibree.idxmax()]
             if li == 0:
