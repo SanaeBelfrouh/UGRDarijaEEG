@@ -192,6 +192,21 @@ Median peak-to-peak amplitude ranged from **25.0 to 49.6 µV** across sessions.
 With a rejection criterion on the *proportion* of noisy channels (15 %), only
 **7 of 3600 epochs (0.2 %)** were rejected.
 
+**Technical validation** (`scripts/08_technical_validation.py`, independent of
+any decoding, computed from the raw XDF of all 8 sessions):
+
+| Check | Result |
+|---|---|
+| Alpha peak (median spectrum) | 7.0–8.5 Hz in every session |
+| Line noise before filtering | 37–53 dB above its neighbourhood, removed by the notch filter |
+| Outlier channels (broadband power > 3 MAD) | 5–8 per session, all frontopolar / anterior frontal (Fp1, Fp2, AF3, AFz, AF4; sometimes AF7, AF8, F8); no central, parietal or occipital channel flagged |
+| Occipital evoked response to the written cue | P1 129–139 ms, N1 178–191 ms, P2 271–292 ms in all 8 sessions; peak GFP 5.2–12.1× baseline; odd/even split-half r = 0.89–0.99; between-session r = 0.83 |
+| Microphone level rise, production vs fixation | articulated median **+33.3 dB**, imagined median **0.0 dB** |
+| Imagined trials above the articulated range (5th percentile, 16.4 dB) | 26 of 1800 (1.4 %); 19 of them have a spectral centroid below 50 Hz (non-vocal sounds), the other 7 are kept for listening (`scripts/09_audio_review.py`) |
+| Acoustic onset of articulated speech | detected in 1781 of 1800 trials, median 630 ms after the go cue (IQR 530–750 ms) |
+
+![Technical validation: spectrum, cue-evoked response, audio level, speech onset](docs/figures/fig8-technical-validation.png)
+
 ### 2.7 Expected layout of the raw data
 
 The scripts search recursively for `*.xdf` files under the folder passed to
@@ -743,6 +758,7 @@ By construction, the following cannot leak:
 
 ```bash
 python tests/test_pipeline.py          # 38 tests, a few minutes
+python tests/test_validation.py        # 8 tests of the technical validation and audio review
 python tests/test_notebook.py          # replays every run_all.py command on synthetic data (~8 min)
 python tests/test_notebook.py --full   # more trials, slower
 ```
@@ -823,9 +839,9 @@ was obtained from the participant.
 **Citation.** An article describing the corpus and the benchmark is in
 preparation:
 
-> Belfrouh, S., et al. *A deeply sampled single-speaker EEG corpus of imagined
-> and articulated Moroccan Darija, with a reproducible decoding benchmark.*
-> In preparation.
+> Belfrouh, S., Salmam, F. Z., Errattahi, R., Ouellet, M., & Gonzalez-Lopez, J. A.
+> *DarijaEEG: The first EEG corpus of imagined and articulated speech in Moroccan
+> Darija, with a reproducible decoding benchmark.* Manuscript in preparation.
 
 **Contact.** Sanae Belfrouh — LTI, ENSA El Jadida, Université Chouaïb Doukkali
 (Morocco) and CIMCYC, Universidad de Granada (Spain).
