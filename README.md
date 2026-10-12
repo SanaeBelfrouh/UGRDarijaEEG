@@ -229,7 +229,8 @@ UGRDarijaEEG/
 │   ├── evaluate.py           fold-shared evaluation, balanced accuracy, permutation tests
 │   ├── stats.py              detectability bounds, Holm correction, paired permutation test
 │   ├── rsa.py                cross-validated (crossnobis) RDMs and Mantel tests
-│   └── topo.py               per-electrode discriminability for topographic maps
+│   ├── topo.py               per-electrode discriminability for topographic maps
+│   └── validation.py         technical validation: spectra, cue-evoked response, audio checks
 ├── scripts/
 │   ├── run_all.py            ONE command that runs every step below, resumable
 │   ├── 00_timing_check.py    marker timing audit (no EEG loaded)
@@ -239,10 +240,12 @@ UGRDarijaEEG/
 │   ├── 04_rank_sweep.py      accuracy as a function of the retained rank
 │   ├── 05_paired_compare.py  paired permutation tests between configurations
 │   ├── 06_figures.py         the 7 manuscript figures, from the result CSVs
-│   └── 07_topomaps.py        per-electrode decoding for scalp maps
+│   ├── 07_topomaps.py        per-electrode decoding for scalp maps
+│   └── 08_technical_validation.py  signal quality, cue-evoked response, audio (raw XDF)
 ├── tests/
 │   ├── test_pipeline.py      38 unit / integration tests (incl. positive & negative controls)
 │   ├── test_notebook.py      replays every run_all.py command on synthetic data
+│   ├── test_validation.py    technical-validation checks on synthetic XDF streams
 │   └── synthetic.py          synthetic EEG generator used by the tests
 ├── notebooks/
 │   └── kaggle_run.ipynb      3-cell notebook: pre-flight, clone, run_all.py
@@ -369,6 +372,11 @@ python scripts/06_figures.py --results results
 
 # 7. Per-electrode discriminability (scalp maps)
 python scripts/07_topomaps.py --epochs epochs.npz
+
+# 8. Technical validation, independent of any decoding (reads the raw XDF):
+#    spectrum per session, visual evoked response to the word cue, audio level
+#    of every trial (vocalisation check for imagined trials), speech onset
+python scripts/08_technical_validation.py --input /path/to/xdf --out results
 ```
 
 ### 6.1 Options of `01_build_epochs.py`
