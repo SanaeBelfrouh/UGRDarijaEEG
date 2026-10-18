@@ -471,7 +471,7 @@ python scripts/09_audio_review.py --input /path/to/xdf --out results/audio_revie
 
 | Name | Channels | Role |
 |---|---:|---|
-| `complet` | all | every surviving channel (reference) |
+| `complet` | 64 | every channel (reference) |
 | `machoire10` | 10 | jaw ring, EMG control |
 | `occipital` | 8 | "plausible but off-topic" control |
 | `peripherique14` | 14 | peripheral electrodes (Muthukumaraswamy, 2013) |
@@ -622,8 +622,8 @@ Three controls, each immune to the failure mode of the others:
    versus +6.7 to +15.7 pt elsewhere) — the signature of a volume-conducted
    physical artifact.
 3. **Asymmetry of supervised spatial filtering.** With the classifier held
-   constant, xDAWN adds **+14.2 pt** to articulated decoding and **nothing** to
-   imagined decoding (paired difference −1.4 pt, p = 0.082).
+   constant, xDAWN adds **+14.2 pt** to articulated decoding and only +1.4 pt,
+   not significant, to imagined decoding (p = 0.11, p<sub>Holm</sub> = 0.78).
 
 ![Contribution of xDAWN by condition and montage](docs/figures/xdawn_asymmetry.png)
 
@@ -633,7 +633,7 @@ Three controls, each immune to the failure mode of the others:
 | articulated, jaw ring (10) | 16.19 % | 27.17 % | +10.98 pt | 0.0024 |
 | articulated, no jaw/occiput (46) | 10.97 % | 21.55 % | +10.58 pt | 0.0024 |
 | articulated, occipital (8) | 8.91 % | 11.97 % | +3.06 pt | 0.0088 |
-| **imagined, full** | 7.68 % | 7.90 % | −1.44 pt | 0.082 (n.s.) |
+| **imagined, full** | 6.62 % | 8.01 % | +1.38 pt | 0.78 (n.s.) |
 
 The articulated signal therefore looks like a **distinct physical phenomenon**,
 not a stronger version of the imagined cortical signal — which argues against
@@ -704,7 +704,8 @@ order; Holm correction within condition. **Nothing is significant.**
 
 ## 10. Methods in brief
 
-**Preprocessing.** Zero-phase band-pass 0.5–45 Hz on the *continuous*
+**Preprocessing.** Zero-phase 50 Hz notch (and harmonics), then zero-phase
+band-pass 0.5–45 Hz, on the *continuous*
 recording (filtering short epochs leaves edge transients that, on a DC-coupled
 amplifier, exceed the EEG itself), resampling to 250 Hz, common average
 reference, epochs from −0.5 to 2.0 s around GO. Trials are rejected when more

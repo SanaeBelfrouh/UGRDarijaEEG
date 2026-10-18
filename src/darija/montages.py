@@ -10,12 +10,12 @@ Les listes suivent la nomenclature 10-20 du bonnet actiCAP 64 canaux. La
 resolution est tolerante a la casse et ignore les electrodes absentes, ce qui
 permet de reutiliser ces montages sur un autre bonnet sans les reecrire.
 
-ATTENTION : ``machoire10`` est une reconstitution des « ten jaw-ring
-electrodes » du manuscrit, pas une copie verifiee. Le manuscrit annonce dix
-electrodes temporales ; la liste ci-dessous est celle qui fait dix et qui
-correspond a la recommandation de Muthukumaraswamy (2013) pour la detection
-d'artefact musculaire. A confronter au notebook d'origine avant de rapporter un
-chiffre comme reproduisant celui du manuscrit.
+``machoire10`` est la liste de tous les resultats « jaw ring » du manuscrit
+(Table 5, section 4.4), qui nomme ses dix electrodes : temporales et
+mastoidiennes, au plus pres des muscles masticateurs et du cou
+(Muthukumaraswamy, 2013). Sur le bonnet actiCAP 64 canaux, les dix et les huit
+occipitales sont toutes presentes, d'ou 64 - 18 = 46 canaux pour
+``sans_machoire``.
 """
 
 from __future__ import annotations

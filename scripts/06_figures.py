@@ -97,7 +97,7 @@ LIBELLES = {
     "avant": "pre-production", "isi": "ISI", "iti": "ITI",
 }
 #: barres du panneau (c) de la figure 3 : montage et nombre d'electrodes
-LIBELLES_BARRES = {"complet": "full montage (60)", "machoire10": "jaw ring (10)",
+LIBELLES_BARRES = {"complet": "full montage (64)", "machoire10": "jaw ring (10)",
                    "sans_machoire": "no jaw/occiput (46)", "occipital": "occipital (8)"}
 
 
