@@ -127,6 +127,12 @@ class CovariancesTransformer(BaseEstimator, TransformerMixin):
 #: les chiffres publies.
 MANUSCRIPT_BANK = ((1.0, 8.0), (8.0, 14.0), (14.0, 26.0), (26.0, 40.0))
 
+#: banc du manuscrit prolonge par deux bandes gamma hautes, pour l'analyse de
+#: sensibilite en bande large (scripts/10_high_frequency.py). Les bandes evitent
+#: le secteur a 50 et 100 Hz, deja retire par le notch. Exige une archive filtree
+#: au moins jusqu'a 120 Hz et echantillonnee a 300 Hz ou plus.
+HIGH_BANK = MANUSCRIPT_BANK + ((55.0, 95.0), (105.0, 120.0))
+
 
 def rank_reduce(X: np.ndarray, groups: np.ndarray, n_components: int = 32,
                 scope: str = "global") -> np.ndarray:

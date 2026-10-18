@@ -397,6 +397,13 @@ python scripts/08_technical_validation.py --input /path/to/xdf --out results
 # 9. Imagined trials in which the microphone picked up sound: one WAV clip per
 #    trial (with reference clips) and acoustic features, to decide by listening
 python scripts/09_audio_review.py --input /path/to/xdf --out results/audio_review
+
+# 10. Sensitivity analysis above 45 Hz, imagined speech only: a second archive
+#     filtered 0.5-120 Hz at 500 Hz, the three reconciliation models on the 15
+#     words and on syllable count, with the manuscript bank (1-40 Hz) and with
+#     it extended by 55-95 and 105-120 Hz (--bank haute); prints a comparison
+#     with the 45 Hz results found in <work>/results (~40 min + a few hours)
+python scripts/10_high_frequency.py --input /path/to/xdf --work <working folder>
 ```
 
 ### 6.1 Options of `01_build_epochs.py`
@@ -760,6 +767,7 @@ By construction, the following cannot leak:
 ```bash
 python tests/test_pipeline.py          # 38 tests, a few minutes
 python tests/test_validation.py        # 8 tests of the technical validation and audio review
+python tests/test_high_frequency.py    # broadband analysis end to end, and its guard on 45 Hz archives
 python tests/test_notebook.py          # replays every run_all.py command on synthetic data (~8 min)
 python tests/test_notebook.py --full   # more trials, slower
 ```
