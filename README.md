@@ -404,6 +404,9 @@ python scripts/09_audio_review.py --input /path/to/xdf --out results/audio_revie
 #     it extended by 55-95 and 105-120 Hz (--bank haute); prints a comparison
 #     with the 45 Hz results found in <work>/results (~40 min + a few hours)
 python scripts/10_high_frequency.py --input /path/to/xdf --work <working folder>
+#     follow-up: paired test of the two banks on the same trials, and the same
+#     comparison in the 500 ms before GO (no production, even imagined)
+python scripts/10_high_frequency.py --input /path/to/xdf --work <working folder> --followup-only
 ```
 
 ### 6.1 Options of `01_build_epochs.py`

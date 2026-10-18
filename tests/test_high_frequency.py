@@ -60,6 +60,25 @@ def test_broadband_analysis_runs_end_to_end():
         assert "BILAN" in r.stdout and "120 Hz, banc haute" in r.stdout
 
 
+def test_followup_pairs_the_two_banks_and_runs_the_pre_go_window():
+    import pandas as pd
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        arch = _archive(tmp / "epochs_hf.npz", sfreq=500.0, high=120.0)
+        r = _run(ROOT / "scripts" / "10_high_frequency.py", "--work", tmp,
+                 "--epochs", arch, "--n-perm", 20, "--followup-only")
+        assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-1500:]
+        t = pd.read_csv(tmp / "results" / "hf_paired_banks.csv")
+        # 2 schemas x 2 recentrages x 2 contrastes, chacun sur les memes essais
+        assert len(t) == 8, t
+        assert t.nulle_moy.abs().max() < 0.05, t.nulle_moy
+        assert (t.p_holm >= t.p_apparie).all()
+        for bank in ("manuscrit", "haute"):
+            pre = pd.read_csv(tmp / "results" / f"hf_pre_{bank}.csv")
+            assert set(pre.contraste) == {"mots15", "syllabes"}
+        assert "TEST APPARIE" in r.stdout and "avant go, banc haute" in r.stdout
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

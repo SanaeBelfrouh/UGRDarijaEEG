@@ -27,6 +27,17 @@ Ce qu'il fait.
 Lecture. Si le gamma haut porte de l'information sur le mot imagine, la
 colonne « banc haute » depasse la colonne « banc manuscrit » sur la meme
 archive. Sinon, les deux se valent et la coupure a 45 Hz ne cache rien.
+
+Suite (``--followup``, ou ``--followup-only`` si l'etape principale est faite).
+Le premier run a montre un gain du banc haute sur le nombre de syllabes, pas sur
+les 15 mots. Deux questions restent :
+4. Le gain est-il reel ? Test apparie sur les MEMES essais : les predictions
+   par essai des deux bancs sont echangees au hasard (05_paired_compare.py),
+   difference = banc haute moins banc manuscrit, Holm sur les comparaisons.
+5. D'ou vient-il ? Meme comparaison dans les 500 ms AVANT le go, ou il n'y a
+   aucune production, meme imaginee. Un gain qui persiste avant le go ne vient
+   pas d'une activite articulatoire couverte ; un gain limite a la production
+   la laisse possible.
 """
 
 from __future__ import annotations
@@ -37,6 +48,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "src"))
 
 MODELS = ("bankcov_tangent_lda", "cov_tangent_lda", "xdawn_tangent_lda")
 SCHEMES = ("subblock", "loso")
@@ -71,6 +83,51 @@ def best_rows(path: Path, label: str):
     return out
 
 
+def paired_banks(results: Path, n_perm: int) -> None:
+    """Banc haute contre banc manuscrit, essai par essai, sur les memes essais."""
+    import importlib.util
+
+    import numpy as np
+    import pandas as pd
+    from darija.stats import holm_bonferroni
+
+    spec = importlib.util.spec_from_file_location("pc", HERE / "05_paired_compare.py")
+    pc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pc)
+
+    files = {b: results / f"hf_paired_{b}.predictions.npz" for b in BANKS}
+    if not all(f.exists() for f in files.values()):
+        print("predictions absentes : test apparie impossible")
+        return
+    lo = dict(np.load(files["manuscrit"], allow_pickle=True))
+    hi = dict(np.load(files["haute"], allow_pickle=True))
+    rows = []
+    for k in sorted(lo):
+        if not k.endswith("|pred") or k not in hi:
+            continue
+        base = k[: -len("|pred")]
+        y_lo, y_hi = lo[f"{base}|vrai"], hi[f"{base}|vrai"]
+        if len(y_lo) != len(y_hi) or not np.array_equal(y_lo.astype(str), y_hi.astype(str)):
+            print(f"  essais differents, comparaison sautee : {base}")
+            continue
+        diff, pval, null_mean = pc.paired_permutation(y_lo, hi[k], lo[k], y_lo, n_perm=n_perm)
+        model, scheme, contrast, recentre, _ = base.split("|")
+        rows.append(dict(modele=model, schema=scheme, contraste=contrast,
+                         recentre=recentre == "1", n=len(y_lo),
+                         difference_haute_moins_manuscrit=round(diff, 4),
+                         p_apparie=round(pval, 4), nulle_moy=round(null_mean, 5)))
+    if not rows:
+        print("aucune paire comparable")
+        return
+    t = pd.DataFrame(rows)
+    t["p_holm"] = np.round(holm_bonferroni(t.p_apparie.values), 4)
+    t.to_csv(results / "hf_paired_banks.csv", index=False)
+    print("\n" + "=" * 96)
+    print("TEST APPARIE — banc haute moins banc manuscrit, memes essais (production, 0 a 2 s)")
+    print("=" * 96)
+    print(t.to_string(index=False))
+
+
 def summary(results: Path) -> None:
     rows = []
     rows += best_rows(results / "reconciliation_brut.csv", "45 Hz, run principal")
@@ -78,6 +135,8 @@ def summary(results: Path) -> None:
              if r["contraste"] == "syllabes"]
     for bank in BANKS:
         rows += best_rows(results / f"hf_{bank}.csv", f"120 Hz, banc {bank}")
+    for bank in BANKS:
+        rows += best_rows(results / f"hf_pre_{bank}.csv", f"avant go, banc {bank}")
     if not rows:
         print("aucun resultat a resumer")
         return
@@ -107,6 +166,10 @@ def main() -> int:
     p.add_argument("--max-hours", type=float, default=11.0)
     p.add_argument("--summary-only", action="store_true",
                    help="n'imprimer que le bilan des CSV deja produits")
+    p.add_argument("--followup", action="store_true",
+                   help="apres l'etape principale : test apparie et fenetre avant le go")
+    p.add_argument("--followup-only", action="store_true",
+                   help="seulement le test apparie et la fenetre avant le go")
     args = p.parse_args()
 
     work = Path(args.work)
@@ -127,7 +190,7 @@ def main() -> int:
             return 1
 
     failed = []
-    for bank in BANKS:
+    for bank in (() if args.followup_only else BANKS):
         code = run("02_benchmark.py",
                    "--epochs", archive, "--condition", "imagined", "--recenter",
                    "--models", *MODELS, "--schemes", *SCHEMES,
@@ -137,6 +200,25 @@ def main() -> int:
                    "--out", results / f"hf_{bank}.csv")
         if code:
             failed.append(bank)
+
+    if args.followup or args.followup_only:
+        common = ["--epochs", archive, "--condition", "imagined", "--recenter",
+                  "--models", "bankcov_tangent_lda", "--schemes", *SCHEMES,
+                  "--contrasts", *CONTRASTS, "--n-components", 32,
+                  "--n-perm", args.n_perm, "--max-hours", args.max_hours]
+        for bank in BANKS:
+            # predictions par essai : sans elles, pas de test apparie
+            if run("02_benchmark.py", *common, "--bank", bank, "--save-predictions",
+                   "--out", results / f"hf_paired_{bank}.csv"):
+                failed.append(f"apparie {bank}")
+        paired_banks(results, args.n_perm)
+        for bank in BANKS:
+            # fenetre sans production : CSV distinct, la cle de reprise ne
+            # contient pas la fenetre
+            if run("02_benchmark.py", *common, "--bank", bank,
+                   "--tmin", -0.5, "--tmax", 0.0,
+                   "--out", results / f"hf_pre_{bank}.csv"):
+                failed.append(f"avant go {bank}")
 
     summary(results)
     if failed:
