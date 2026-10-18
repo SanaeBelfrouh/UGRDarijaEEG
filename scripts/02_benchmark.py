@@ -38,7 +38,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from darija.evaluate import COVARIANCE_REPRESENTATIONS, evaluate_many  # noqa: E402
-from darija.features import FILTER_BANK, MANUSCRIPT_BANK                # noqa: E402
+from darija.features import FILTER_BANK, HIGH_BANK, MANUSCRIPT_BANK     # noqa: E402
 from darija.montages import describe, missing_from, resolve             # noqa: E402
 from darija.pipelines import build_representations, representation_for  # noqa: E402
 from darija.preprocess import crop                                     # noqa: E402
@@ -83,8 +83,9 @@ def main() -> int:
     parser.add_argument("--no-subset-reref", action="store_true",
                         help="ne pas recalculer la reference moyenne apres selection "
                              "d'un sous-montage (permet de reproduire la fuite)")
-    parser.add_argument("--bank", default="manuscrit", choices=("manuscrit", "large"),
-                        help="banc de filtres : 4 bandes du manuscrit, ou 6 bandes")
+    parser.add_argument("--bank", default="manuscrit", choices=("manuscrit", "large", "haute"),
+                        help="banc de filtres : 4 bandes du manuscrit, 6 bandes, ou "
+                             "manuscrit + gamma haut (55-95 et 105-120 Hz)")
     parser.add_argument("--max-hours", type=float, default=11.0,
                         help="budget de temps ; le script s'arrete proprement avant")
     parser.add_argument("--save-predictions", action="store_true",
@@ -142,7 +143,16 @@ def main() -> int:
     print(f"{len(X)} essais | {X.shape[1]} canaux | fenetre "
           f"[{times[0]:.2f}, {times[-1]:.2f}] s | {len(np.unique(session))} sessions\n")
 
-    bands = MANUSCRIPT_BANK if args.bank == "manuscrit" else FILTER_BANK
+    bands = {"manuscrit": MANUSCRIPT_BANK, "large": FILTER_BANK, "haute": HIGH_BANK}[args.bank]
+    # Une bande au-dessus du passe-bas de l'archive ne contient que du bruit
+    # filtre : le classifieur tournerait, et le resultat ne voudrait rien dire.
+    # Les archives anterieures a ce champ etaient toutes filtrees a 45 Hz.
+    filt_high = float(archive["filter_high"]) if "filter_high" in archive.files else 45.0
+    top = max(b[1] for b in bands)
+    if top > filt_high or top >= 0.45 * sfreq:
+        raise SystemExit(f"banc '{args.bank}' jusqu'a {top:g} Hz, mais l'archive est filtree "
+                         f"a {filt_high:g} Hz et echantillonnee a {sfreq:g} Hz : reconstruire "
+                         f"avec 01_build_epochs.py --high {top:g} --sfreq {max(300, 4 * top):g}")
     n_components = args.n_components or None
 
     needed = {representation_for(m) for m in args.models}

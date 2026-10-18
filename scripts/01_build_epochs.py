@@ -155,6 +155,8 @@ def main() -> int:
         times=times,
         ch_names=np.asarray(ch_names),
         sfreq=args.sfreq,
+        filter_low=args.low,
+        filter_high=args.high,
     )
 
     size_gb = Path(args.out).stat().st_size / 1e9
