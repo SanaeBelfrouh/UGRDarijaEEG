@@ -857,3 +857,7 @@ preparation:
 
 **Contact.** Sanae Belfrouh — LTI, ENSA El Jadida, Université Chouaïb Doukkali
 (Morocco) and CIMCYC, Universidad de Granada (Spain).
+
+**License.** The code in this repository is released under the [MIT License](LICENSE).
+It covers the code only: the EEG recordings are distributed separately, under the
+terms stated in the data repository.
