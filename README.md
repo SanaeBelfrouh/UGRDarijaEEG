@@ -8,8 +8,8 @@ with a single command.
 
 The project is a collaboration between the LTI laboratory (ENSA El Jadida,
 Université Chouaïb Doukkali, Morocco) and CIMCYC (Universidad de Granada, Spain).
-As far as we know, it is the first EEG corpus of imagined speech in Moroccan
-Darija.
+As far as we know, it is the first EEG corpus of imagined and articulated speech
+in Moroccan Darija.
 
 > **What this repository is, and is not.** It is a *corpus and evaluation*
 > project, not a "we decode thoughts at 90 %" project. The pipeline is designed
@@ -18,7 +18,7 @@ Darija.
 > smallest accuracy the sample size could detect. The honest headline is that
 > **articulated speech decodes well, imagined speech decodes at the resolution
 > limit of the corpus, and one phonological contrast (syllable count) survives
-> correction for multiple comparisons.**
+> correction in one configuration but not a change of pipeline.**
 
 ---
 
@@ -56,7 +56,9 @@ significance threshold is **7.63 %** and the smallest accuracy detectable with
 | Does the pipeline detect a real signal? (positive control) | **Yes.** Articulated speech decodes at **30.5 %** across sessions and **43.3 %** within session — 4.6× and 6.5× chance, p < 0.001. |
 | Can the 15 *imagined* words be decoded? | **Barely.** Best result **8.18 %** (p = 0.005), i.e. exactly at the detectability bound. **0 of 32** configurations survive Holm correction. |
 | Is any method better than another on imagined speech? | **No.** **0 of 148** paired comparisons (same trials, 10 representations, 4 cross-validation schemes, with/without recentring) is significant. |
-| Is *anything* decodable from imagined speech after correction? | **Yes — syllable count** (1 vs 2 syllables): **54.1 %** against 50 % chance, across sessions, Holm p = 0.018. |
+| Is *anything* decodable from imagined speech after correction? | **A candidate only — syllable count** (1 vs 2 syllables): **54.1 %** against 50 % chance, across sessions, Holm p = 0.018, in one configuration. It is lost when the pipeline is chosen by nested cross-validation (50.6 %, p = 0.33) or restricted to frequencies below 26 Hz (51.1 %, p = 0.18). |
+| Does a better pipeline break the imagined ceiling? | **No.** None of 36 candidate pipelines, selected by nested leave-one-session-out cross-validation without access to the test session, exceeds it. |
+| In which frequencies is the imagined information? | **26–45 Hz.** Both imagined effects disappear below 26 Hz. Muscle activity above 55 Hz carries no word or syllable information in imagined trials, but a muscular contribution between 26 and 45 Hz cannot be excluded without EMG. |
 | Is articulated decoding cortical speech, or muscle? | **Largely peripheral (muscle).** Three independent controls converge (see [§9.4](#94-articulated-decoding-is-largely-peripheral)). |
 | Does the written cue contaminate imagined speech? | **No evidence of it.** The pre-production window is at chance, and the orthographic similarity model is flat (ρ = −0.03). |
 
@@ -591,8 +593,17 @@ a weak imagined result would be indistinguishable from a broken pipeline.
   interpretable only because the positive control works.
 - For reference, reaching 80 % power on a true accuracy of 8 % would require
   ≈ 2300 trials (≈ 10 sessions); for 7.5 %, ≈ 5750 trials (≈ 26 sessions).
+- **The ceiling is not an artefact of the configurations tried.** Selecting the
+  pipeline among 36 candidates (preprocessing, filter bank, rank, Riemannian
+  geometry) by nested leave-one-session-out cross-validation, so that the test
+  session never informs the choice, does not exceed it.
+- Restricting the representations to frequencies below 26 Hz brings the
+  fifteen-word result to chance (6.8 %, p = 0.40).
 
-### 9.3 Syllable count survives correction
+> The nested-selection and frequency-restriction analyses of §9.2–9.3 are
+> reported in the article; they are not yet part of `run_all.py`.
+
+### 9.3 Syllable count: a candidate effect
 
 Across 264 configurations of six structured contrasts, two survive Holm
 correction — the same contrast under two models:
@@ -613,7 +624,19 @@ decision at this sample size.
 **Caveat.** Holm is applied within each contrast family. Six contrasts were
 tested; an additional correction across families would bring 0.0176 to ≈ 0.11.
 The contrasts were pre-specified from Darija phonology rather than derived from
-the data, but both levels should be reported.
+the data, but both levels should be reported. Four words (*dwa*, *lma*, *lla*,
+*tbib*) have an ambiguous syllable count, because Moroccan Darija admits
+consonant-nucleus syllables.
+
+**Robustness.** The effect depends on the pipeline. When preprocessing, filter
+bank, rank and Riemannian geometry are chosen among 36 candidates by nested
+leave-one-session-out cross-validation inside the training sessions, syllable
+count decodes at **50.6 %** (p = 0.33), against 54.95 % for the configuration
+above on the same 1753 trials. It also falls to **51.1 %** (p = 0.18) when the
+representation is restricted to frequencies below 26 Hz. Excluding imagined
+trials with a sound or a blink in the production window leaves it unchanged
+(54.2–54.6 %). It is therefore reported as a **candidate for confirmatory
+testing** in new recordings, with the configuration fixed in advance.
 
 ### 9.4 Articulated decoding is largely peripheral
 
@@ -705,8 +728,11 @@ order; Holm correction within condition. **Nothing is significant.**
 > peripheral. Imagined speech decodes at 8.2 % against 6.7 % chance; ten
 > representations and four validation schemes are indistinguishable from one
 > another, and the best result sits at the detectability bound of 1800 trials.
-> A single effect survives correction for multiple testing: syllable count,
-> decodable across sessions at 54.1 % against 50 % chance. In the absence of any
+> No pipeline selected without access to the test session exceeds that ceiling.
+> One contrast, syllable count, survives correction in one configuration
+> (54.1 % against 50 % chance across sessions) but not a change of pipeline, and
+> remains a candidate for confirmation. Both imagined effects lie at 26–45 Hz,
+> where a muscular contribution cannot be excluded without EMG. In the absence of any
 > measure of compliance with the imagery task, all reported accuracies are lower
 > bounds.
 
@@ -827,7 +853,12 @@ the augmented signal at full size).
   the articulated block, so condition is confounded with time on task. This
   affects comparisons *between* conditions, not decoding *within* the imagined
   condition.
-- **No dedicated EMG.** Peripheral EEG electrodes stand in for surface EMG.
+- **No dedicated EMG.** Peripheral EEG electrodes stand in for surface EMG. The
+  imagined-speech information lies at 26–45 Hz, where cortical beta and
+  low-gamma rhythms mix with the low-frequency tail of muscle activity; activity
+  above 55 Hz, where muscle dominates, carries no word or syllable information
+  in imagined trials, but a muscular contribution between 26 and 45 Hz cannot be
+  excluded without electromyography.
 - **Written cue.** The cue was shown in arabizi (read automatically by the
   participant, a daily user). The randomised ISI, the null pre-production
   window, and the flat orthographic RSA model bound its effect; an auditory cue
