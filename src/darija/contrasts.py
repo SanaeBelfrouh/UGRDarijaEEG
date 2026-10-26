@@ -115,7 +115,7 @@ def apply_contrast(name: str, y) -> tuple[np.ndarray, np.ndarray, float]:
     """Renvoie (etiquettes, masque des essais retenus, niveau du hasard).
 
     Le hasard est celui d'un classifieur qui repondrait toujours la classe
-    majoritaire, pas 1/n_classes : avec des classes desequilibrees (six mots sur
+    majoritaire, pas 1/n_classes : avec des classes desequilibrees (cinq mots sur
     quinze contiennent la pharyngale) 1/n_classes sous-estime le hasard et rend
     significatif un decodeur qui n'a rien appris.
     """
