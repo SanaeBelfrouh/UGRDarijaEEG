@@ -655,7 +655,7 @@ Three controls, each immune to the failure mode of the others:
    versus +6.7 to +15.7 pt elsewhere) — the signature of a volume-conducted
    physical artifact.
 3. **Asymmetry of supervised spatial filtering.** With the classifier held
-   constant, xDAWN adds **+14.2 pt** to articulated decoding and only +1.4 pt,
+   constant, xDAWN adds **+14.1 pt** to articulated decoding and only +1.4 pt,
    not significant, to imagined decoding (p = 0.11, p<sub>Holm</sub> = 0.78).
 
 ![Contribution of xDAWN by condition and montage](docs/figures/xdawn_asymmetry.png)
