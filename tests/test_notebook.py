@@ -83,9 +83,9 @@ def build_archive(path: Path, *, n_per_word: int = 2, sfreq: float = 100.0) -> P
     times = np.arange(-0.5, 2.0, 1 / sfreq)
 
     # Les etiquettes doivent etre les VRAIS mots : les contrastes structures
-    # (syllabes, attaque, semantique, pharyngale, oui_non) lisent WORD_FEATURES
-    # par cle. Avec des w00..w14 ils levent un KeyError, et le test passerait a
-    # cote des cinq contrastes qui portent la moitie de la grille.
+    # (attaque, semantique, pharyngale, oui_non) lisent WORD_FEATURES par cle.
+    # Avec des w00..w14 ils levent un KeyError, et le test passerait a cote des
+    # quatre contrastes qui portent la plus grande partie de la grille.
     mots = np.asarray(sorted(WORD_FEATURES), dtype=object)
     assert len(mots) == 15, f"15 mots attendus, {len(mots)} dans WORD_FEATURES"
 

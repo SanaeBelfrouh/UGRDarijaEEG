@@ -4,18 +4,17 @@
     python scripts/12_imagined_controls.py --epochs epochs.npz --flags results/essais.csv \
         --hf results/hf_55_95.npz --out results
 
-Trois questions, avec les deux configurations du manuscrit (15 mots :
-``bankcov_tangent_lda`` sans recentrage ; nombre de syllabes : ``cov_tangent_lda``
-recentre), validation leave-one-session-out, sur les essais imagines de
-l'archive de reference :
+Trois questions, avec la configuration du manuscrit (15 mots,
+``bankcov_tangent_lda`` sans recentrage), validation leave-one-session-out, sur
+les essais imagines de l'archive de reference :
 
 A. ``controles_exclusions.csv`` : retirer les essais avec un son (montee audio
    au-dessus de ``--sound-db`` dB), ceux avec un clignement pendant la
    production, ou les deux. Retirer des essais change a lui seul l'exactitude
    attendue : chaque exclusion est comparee a ``--n-random`` exclusions
    aleatoires du meme nombre d'essais dans chaque session.
-B. ``controles_26hz.csv`` : les deux configurations sous 26 Hz (banc du
-   manuscrit sans sa bande 26-40 Hz ; covariance du signal filtre 0,5-26 Hz).
+B. ``controles_26hz.csv`` : la configuration sous 26 Hz (banc du manuscrit
+   sans sa bande 26-40 Hz).
 C. ``controles_muscle.csv`` : la seule puissance 55-95 Hz (scripts/11) decode-
    t-elle le mot ? Les deux conditions, l'articule servant de controle positif ;
    ``controles_hf_hausse.csv`` : la hausse de cette puissance apres le go, par
@@ -44,8 +43,7 @@ from darija.preprocess import bandpass, crop                                    
 from darija.stats import (balanced_accuracy, holm_bonferroni,                   # noqa: E402
                           minimum_detectable_balanced_accuracy, permutation_pvalue)
 
-CONFIGS = (("mots15", "bankcov_tangent_lda", False),
-           ("syllabes", "cov_tangent_lda", True))
+CONFIGS = (("mots15", "bankcov_tangent_lda", False),)
 GROUPS = {
     "machoire": ("FT7", "FT8", "FT9", "FT10", "T7", "T8", "TP7", "TP8", "TP9", "TP10"),
     "central": ("Cz", "C1", "C2", "C3", "C4", "CP1", "CP2", "CP3", "CP4", "CPz"),
@@ -130,7 +128,7 @@ def main() -> int:
           flush=True)
 
     X, _ = crop(X_full, times, 0.0, 2.0)
-    reps = build_representations(X, sf, bands=MANUSCRIPT_BANK, include=("bankcov", "cov"),
+    reps = build_representations(X, sf, bands=MANUSCRIPT_BANK, include=("bankcov",),
                                  n_components=32, groups=ses, rank_scope="global")
     del X
     exclusions = {"aucune": np.zeros(len(y), bool), "son": sound, "clignement": blink,
@@ -154,7 +152,7 @@ def main() -> int:
 
     low_bank = tuple(b for b in MANUSCRIPT_BANK if b[1] <= 26.0)
     X_low, _ = crop(bandpass(X_full, sf, 0.5, 26.0), times, 0.0, 2.0)
-    reps_low = build_representations(X_low, sf, bands=low_bank, include=("bankcov", "cov"),
+    reps_low = build_representations(X_low, sf, bands=low_bank, include=("bankcov",),
                                      n_components=32, groups=ses, rank_scope="global")
     del X_low, X_full
     rows = []
@@ -183,7 +181,7 @@ def main() -> int:
         mc = mc[mc.hf_complete.astype(bool)]
         F = hf["F"][mc.pos.values].astype(np.float64)
         words, groups = mc.word.values.astype(str), mc.session.values.astype(str)
-        for contrast in ("mots15", "syllabes"):
+        for contrast in ("mots15",):
             labels, cmask, _ = apply_contrast(contrast, words)
             labels = np.asarray(labels, dtype=object)
             g = groups[cmask]

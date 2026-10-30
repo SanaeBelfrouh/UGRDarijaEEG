@@ -440,11 +440,11 @@ def etape_grille(r: Runner) -> None:
           "--models", "puissance_lda", "csp_lda", "cov_tangent", "cov_tangent_lda",
           "bankcov_tangent", "bankcov_tangent_lda", "xdawn_tangent_lda",
           "--schemes", "subblock", "within_session", "pooled_blocked", "loso",
-          "--contrasts", "mots15", "syllabes", "attaque", "semantique",
+          "--contrasts", "mots15", "attaque", "semantique",
           "pharyngale", "oui_non",
           "--n-components", 32, "--bank", "manuscrit",
           "--out", r.results / "imagine_grille.csv",
-          label="13. GRILLE COMPLÈTE — 4 schémas x 6 contrastes")
+          label="13. GRILLE COMPLÈTE — 4 schémas x 5 contrastes")
 
 
 def etape_rsa(r: Runner) -> None:
@@ -519,7 +519,7 @@ def etape_imbrique(r: Runner) -> None:
         return
     extra = ["--epochs-alt", r.other_archive()] if r.other_archive().exists() else []
     r.run("13_nested_selection.py", "--epochs", r.archive(), *extra, "--out", r.results,
-          label="SÉLECTION IMBRIQUÉE — imaginé, 15 mots et syllabes", budget=False)
+          label="SÉLECTION IMBRIQUÉE — imaginé, 15 mots", budget=False)
 
 
 def etape_tableau(r: Runner) -> None:
@@ -583,7 +583,7 @@ ATTENDUS = (
     ("figures/fig2-main-result.pdf", "figures", "les deux conditions sur un axe"),
     ("figures/fig3-muscle-controls.pdf", "figures", "les trois contrôles musculaires"),
     ("figures/fig4-rank-sweep.pdf", "figures", "la courbe rang / exactitude"),
-    ("figures/fig5-contrasts.pdf", "figures", "les six contrastes sur un axe commun"),
+    ("figures/fig5-contrasts.pdf", "figures", "les cinq contrastes sur un axe commun"),
     ("figures/fig6-rsa.pdf", "figures", "dissimilarité et corrélations de Mantel"),
     ("topo_electrodes.csv", "topo", "discriminabilité électrode par électrode"),
     ("figures/fig7-topomaps.pdf", "figures", "où est le signal sur le scalp"),
@@ -607,7 +607,7 @@ ATTENDUS = (
 CONNUS = frozenset(
     [name for name, _, _ in ATTENDUS]
     + ["rsa.csv", "imagine.csv", "benchmark.csv"]      # noms d'avant
-    + ["imbrique_choix_mots15.csv", "imbrique_choix_syllabes.csv", "paires_reconciliation_brut.csv",
+    + ["imbrique_choix_mots15.csv", "paires_reconciliation_brut.csv",
        "paires_reconciliation_ica.csv", "paires_imagine_mots15.csv", "reconciliation_brut.csv",
        "reconciliation_ica.csv"]
 )

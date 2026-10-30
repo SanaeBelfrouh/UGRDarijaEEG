@@ -103,9 +103,8 @@ ORTHOGRAPHIC_KEYS = ("orthographic", "cue_length")
 def model_rdm(labels: list[str], key: str) -> np.ndarray:
     """RDM theorique : 0 si les deux mots partagent la modalite, 1 sinon.
 
-    Trois exceptions, ordinales et non categorielles :
+    Deux exceptions, ordinales et non categorielles :
 
-    - ``syllables`` : difference absolue du nombre de syllabes ;
     - ``orthographic`` : distance d'edition entre les deux chaines d'indice,
       normalisee par la longueur de la plus longue, donc dans [0, 1] ;
     - ``cue_length`` : difference absolue du nombre de caracteres affiches.
@@ -131,10 +130,7 @@ def model_rdm(labels: list[str], key: str) -> np.ndarray:
     values = [WORD_FEATURES[w][key] for w in labels]
     for i in range(n):
         for j in range(n):
-            if key == "syllables":
-                rdm[i, j] = abs(values[i] - values[j])
-            else:
-                rdm[i, j] = float(values[i] != values[j])
+            rdm[i, j] = float(values[i] != values[j])
     return rdm
 
 

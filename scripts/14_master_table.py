@@ -33,7 +33,7 @@ SOURCES = {
     "controle_temporel_articulated.csv": "articule, fenetre -0,5 a 0 s avant le go",
     "controle_temporel_imagined.csv": "imagine, fenetre -0,5 a 0 s avant le go",
     "imagine_mots15.csv": "imagine, 15 mots, dix modeles",
-    "imagine_grille.csv": "imagine, six contrastes, quatre schemas",
+    "imagine_grille.csv": "imagine, cinq contrastes, quatre schemas",
     "reconciliation_brut.csv": "imagine, 15 mots, archive sans ICA",
     "reconciliation_ica.csv": "imagine, 15 mots, archive avec ICA",
     "rank_sweep.csv": "imagine, 15 mots, rang retenu",
@@ -145,7 +145,6 @@ def chiffres(res: Path) -> pd.DataFrame:
                   round(float(r.equilibree), 4), "imbrique_resultats.csv", f"{int(r.essais)} essais")
             c.add("imagine, selection imbriquee", f"{r.contraste} : {r.procedure} : p",
                   round(float(r.p), 4), "imbrique_resultats.csv")
-    c.best("contrastes", "imagine_grille.csv", "syllabes, meilleure configuration", contraste="syllabes")
     g = c.read("imagine_grille.csv")
     if g is not None and "significatif_holm" in g:
         for contraste, block in g.groupby("contraste"):

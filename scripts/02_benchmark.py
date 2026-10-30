@@ -54,7 +54,7 @@ DEFAULT_MODELS = ("puissance_lda", "csp_lda", "cov_tangent", "bankcov_tangent")
 # subblock est le schema « block-grouped » du manuscrit : groupe par couple
 # (session, sous-bloc), donc plus permissif que loso.
 DEFAULT_SCHEMES = ("subblock", "within_session", "pooled_blocked", "loso")
-DEFAULT_CONTRASTS = ("mots15", "oui_non", "syllabes", "semantique")
+DEFAULT_CONTRASTS = ("mots15", "oui_non", "semantique")
 
 
 def main() -> int:
