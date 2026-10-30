@@ -524,7 +524,12 @@ def etape_imbrique(r: Runner) -> None:
 
 def etape_transfert(r: Runner) -> None:
     """Un décodeur entraîné sur l'articulé lit-il l'imaginé ? L'articulé aide-t-il l'imaginé ?"""
-    if all((r.results / f).exists() for f in ("transfert.csv", "transfert_apparie.csv")):
+    import pandas as pd
+
+    done = all((r.results / f).exists() for f in ("transfert.csv", "transfert_apparie.csv"))
+    # une version antérieure calculait la base de rang sur les deux conditions :
+    # ses résultats ne sont pas repris
+    if done and "base_rang" in pd.read_csv(r.results / "transfert.csv", nrows=1).columns:
         print("transfert déjà présent — étape sautée")
         return
     r.run("15_transfer.py", "--epochs", r.archive(), "--out", r.results,

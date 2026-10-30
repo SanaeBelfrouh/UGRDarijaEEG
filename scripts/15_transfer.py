@@ -26,6 +26,14 @@ Chaque schema est evalue sans et avec recentrage riemannien par session ET par
 condition (adaptation de domaine non supervisee : chaque bloc est blanchi par
 sa propre moyenne geometrique, sans etiquette).
 
+La base de la reduction de rang (32 composantes) est calculee sur les seuls
+essais imagines, comme dans l'etape ``mots15`` : la reference ``imagine ->
+imagine`` reproduit alors exactement la configuration du manuscrit, et les
+essais articules sont projetes sur la meme base. Une base calculee sur les deux
+conditions serait dominee par la variance de l'articulation (muscle) et
+degraderait le decodage imagine lui-meme.
+
+
 Sorties : ``transfert.csv`` (exactitude equilibree, seuil de detectabilite,
 p par permutation dans les sessions, Holm sur la famille) et
 ``transfert_apparie.csv`` (chaque schema vers l'imagine compare a la reference
@@ -52,6 +60,7 @@ from darija.features import MANUSCRIPT_BANK                                     
 from darija.pipelines import (build_representations, make_classifier,          # noqa: E402
                               make_transform, representation_for)
 from darija.preprocess import crop                                              # noqa: E402
+from darija.riemann import covariances                                          # noqa: E402
 from darija.stats import (balanced_accuracy, holm_bonferroni,                   # noqa: E402
                           minimum_detectable_balanced_accuracy, permutation_pvalue)
 
@@ -122,9 +131,11 @@ def main() -> int:
     print(f"{int((cond == 'imagined').sum())} essais imagines, "
           f"{int((cond == 'articulated').sum())} articules, {len(np.unique(ses))} sessions", flush=True)
     t0 = time.time()
+    # base de rang commune, calculee sur les essais imagines seuls (sans etiquette)
+    _, V = np.linalg.eigh(covariances(X[cond == "imagined"]).mean(axis=0))
+    X = np.einsum("kc,nct->nkt", V[:, -32:].T, X)
     reps = build_representations(X, float(a["sfreq"]), bands=MANUSCRIPT_BANK,
-                                 include=("bankcov", "cov", "puissance"), n_components=32,
-                                 groups=ses, rank_scope="global")
+                                 include=("bankcov", "cov", "puissance"), n_components=None)
     del X
     domain = np.char.add(np.char.add(ses, "|"), cond)
     print(f"representations pretes ({time.time() - t0:.0f} s)", flush=True)
@@ -140,7 +151,7 @@ def main() -> int:
                 yt, yp, g = y[tested], pred[tested], ses[tested]
                 acc = balanced_accuracy(yt, yp, sorted(set(yt)))
                 pv, _, null_mean = permutation_pvalue(yt, yp, g, n_perm=args.n_perm)
-                rows.append(dict(schema=scheme, modele=model, recentre=recenter,
+                rows.append(dict(schema=scheme, modele=model, recentre=recenter, base_rang="imagine",
                                  essais_test=int(tested.sum()), equilibree=acc, hasard=1 / len(set(yt)),
                                  seuil_eq=minimum_detectable_balanced_accuracy(Counter(yt).values()),
                                  p_perm=pv, nulle_moy=null_mean))
