@@ -42,6 +42,7 @@ SOURCES = {
     "controles_exclusions.csv": "imagine, sans les essais avec son ou clignement",
     "controles_26hz.csv": "imagine, sous 26 Hz",
     "controles_muscle.csv": "puissance 55-95 Hz seule",
+    "transfert.csv": "transfert entre conditions, 15 mots",
 }
 
 
@@ -170,6 +171,23 @@ def chiffres(res: Path) -> pd.DataFrame:
                   "controles_hf_hausse.csv")
             c.add("controles", f"hausse 55-95 Hz, {cond}, {groupe}, sessions significatives apres Holm",
                   int((block.p_holm < 0.05).sum()), "controles_hf_hausse.csv", f"sur {len(block)}")
+    tr = c.read("transfert.csv")
+    if tr is not None:
+        for schema, block in tr.groupby("schema", sort=False):
+            r = block.loc[block.equilibree.idxmax()]
+            detail = f"modele={r.modele} recentre={r.recentre}"
+            c.add("transfert", f"{schema} : meilleure exactitude equilibree", round(float(r.equilibree), 4),
+                  "transfert.csv", detail)
+            c.add("transfert", f"{schema} : p (Holm, famille du fichier)", round(float(r.p_holm), 4),
+                  "transfert.csv", detail)
+            c.add("transfert", f"{schema} : seuil de detectabilite 80 %", round(float(r.seuil_eq), 4),
+                  "transfert.csv", detail)
+    ta = c.read("transfert_apparie.csv")
+    if ta is not None:
+        for _, r in ta.iterrows():
+            label = f"{r.schema} moins {r.reference}, {r.modele}, recentre={r.recentre}"
+            c.add("transfert", f"{label} : difference", round(float(r.difference), 4), "transfert_apparie.csv")
+            c.add("transfert", f"{label} : p apparie (Holm)", round(float(r.p_holm), 4), "transfert_apparie.csv")
     for name in ("paires_emg_montages.csv", "paires_reconciliation_brut.csv", "paires_reconciliation_ica.csv",
                  "paires_imagine_mots15.csv"):
         t = c.read(name)
