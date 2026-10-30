@@ -321,7 +321,7 @@ python scripts/run_all.py --input /path/to/xdf --work /path/to/work
 Useful options:
 
 ```bash
-python scripts/run_all.py --list                      # list the 13 steps
+python scripts/run_all.py --list                      # list the 18 steps
 python scripts/run_all.py ... --only rang grille      # run only these steps
 python scripts/run_all.py ... --skip archives         # epochs already built
 python scripts/run_all.py ... --max-hours 11          # stop cleanly before a time limit
@@ -339,19 +339,31 @@ answers, what is missing, and the exact `--only` command to recompute it.
 |---|---|---|---|
 | 1 | `timing` | `timing.csv` | Is the timing jitter the intended ISI, or clock drift? |
 | 2 | `archives` | `epochs.npz`, `epochs_ica.npz` | — (prerequisite, ≈ 33 min each, without / with ocular ICA) |
-| 3 | `temoin` | `temoin_articule.csv` | Positive control: is the pipeline sensitive to a real signal (articulated)? |
-| 4 | `reconciliation` | `reconciliation_brut.csv`, `reconciliation_ica.csv` | Does the 8.1 % imagined result reproduce, with and without ICA? |
-| 5 | `montages` | `emg_montages.csv` | Do 10 jaw electrodes beat the full montage (muscle control)? |
-| 6 | `temporel` | `controle_temporel_*.csv` | Does decoding survive in a window with no muscle activity (−0.5 → 0 s)? |
-| 7 | `rang` | `rank_sweep.csv` | How does accuracy depend on the retained rank? |
-| 8 | `mots15` | `imagine_mots15.csv` | Does anything exceed the 8.13 % bound on the 15 imagined words? |
-| 9 | `grille` | `imagine_grille.csv` | Does a structured contrast emerge where the 15 words fail? |
-| 10 | `rsa` | `rsa_imagined.csv`, `rsa_articulated.csv` | Is there representational structure across word pairs? |
-| 11 | `apparies` | `paires_*.csv` | Which differences between configurations are real? What does xDAWN alone add? |
-| 12 | `topo` | `topo_electrodes.csv` | Where on the scalp is the signal? |
-| 13 | `figures` | `figures/fig1…fig7*.pdf` | The seven manuscript figures |
+| 3 | `validation` | `validation_sessions.csv`, `validation_audio.csv`, `figures/fig8…` | Technical validation, independent of decoding |
+| 4 | `temoin` | `temoin_articule.csv` | Positive control: is the pipeline sensitive to a real signal (articulated)? |
+| 5 | `mots15` | `imagine_mots15.csv` | Ten representations on the 15 imagined words |
+| 6 | `imbrique` | `imbrique_*.csv` | Imagined decoding with the configuration chosen by nested cross-validation (headline result) |
+| 7 | `temporel` | `controle_temporel_*.csv` | Decoding in the 500 ms before the go cue |
+| 8 | `topo` | `topo_electrodes.csv` | Where on the scalp is the signal? |
+| 9 | `drapeaux` | `essais.csv`, `hf_55_95.npz` | Sound, blink and 55–95 Hz power of every trial |
+| 10 | `controles` | `controles_*.csv` | Does the imagined result survive without sound/blink trials, below 26 Hz, and does muscle alone decode? |
+| 11 | `grille` | `imagine_grille.csv` | Does a structured contrast emerge where the 15 words fail? |
+| 12 | `reconciliation` | `reconciliation_brut.csv`, `reconciliation_ica.csv` | Same models with and without ocular ICA |
+| 13 | `montages` | `emg_montages.csv` | Electrode subsets and supervised spatial filtering |
+| 14 | `apparies` | `paires_*.csv` | Which differences between configurations are real? |
+| 15 | `rang` | `rank_sweep.csv` | How does accuracy depend on the retained rank? |
+| 16 | `rsa` | `rsa_imagined.csv`, `rsa_articulated.csv` | Is there representational structure across word pairs? |
+| 17 | `figures` | `figures/*.pdf` | The manuscript figures |
+| 18 | `tableau` | `tableau_configurations.csv`, `chiffres_manuscrit.csv` | Every configuration evaluated, and every number of the manuscript with its source |
 
-Measured total: **10.67 h** on a Kaggle CPU kernel.
+**One archive, one execution.** Every decoding step uses the same epoch archive,
+chosen with `--archive` (default `brut`, without ocular ICA); the other archive
+only enters the with/without-ICA comparison and the preprocessing choice of the
+nested selection. The archive name is written to `results/run_manifest.json`, and
+results produced with another archive, or by a run older than this rule, are never
+reused. Every number of the manuscript therefore has a single value.
+
+Measured total before steps 3, 6, 9 and 10 were added: **10.67 h** on a Kaggle CPU kernel; the full run takes about 14 h, i.e. two Kaggle sessions (the second resumes from the first's output).
 
 ---
 
@@ -409,6 +421,14 @@ python scripts/10_high_frequency.py --input /path/to/xdf --work <working folder>
 #     follow-up: paired test of the two banks on the same trials, and the same
 #     comparison in the 500 ms before GO (no production, even imagined)
 python scripts/10_high_frequency.py --input /path/to/xdf --work <working folder> --followup-only
+# 11. Per-trial sound, blink and 55-95 Hz power (reads the raw XDF, ~5 min per session)
+python scripts/11_trial_flags.py --input /path/to/xdf --out results
+# 12. Controls on imagined speech: exclusions, below 26 Hz, muscle-only decoding
+python scripts/12_imagined_controls.py --epochs epochs.npz --flags results/essais.csv --hf results/hf_55_95.npz --out results
+# 13. Nested selection of the configuration (headline imagined result)
+python scripts/13_nested_selection.py --epochs epochs.npz --epochs-alt epochs_ica.npz --out results
+# 14. Master table of every configuration and of the manuscript numbers
+python scripts/14_master_table.py --results results
 ```
 
 ### 6.1 Options of `01_build_epochs.py`
@@ -600,8 +620,10 @@ a weak imagined result would be indistinguishable from a broken pipeline.
 - Restricting the representations to frequencies below 26 Hz brings the
   fifteen-word result to chance (6.8 %, p = 0.40).
 
-> The nested-selection and frequency-restriction analyses of §9.2–9.3 are
-> reported in the article; they are not yet part of `run_all.py`.
+> The nested-selection and frequency-restriction analyses of §9.2–9.3 are steps
+> `imbrique` and `controles` of `run_all.py` (scripts 13 and 12). The values in
+> this section come from earlier, separate runs and will be replaced by those of
+> the single execution.
 
 ### 9.3 Syllable count: a candidate effect
 
