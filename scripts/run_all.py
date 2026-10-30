@@ -17,12 +17,21 @@ et une étape qui échoue est signalée sans emporter les suivantes.
     python scripts/run_all.py --input /kaggle/input --work /kaggle/working
     python scripts/run_all.py --list
     python scripts/run_all.py --only rang grille
+
+Une seule archive d'époques sert à toutes les analyses de décodage
+(``--archive``, par défaut celle sans retrait oculaire) ; l'autre n'intervient
+que comme analyse de sensibilité (réconciliation) et comme choix offert à la
+sélection imbriquée. Le nom de l'archive est écrit dans
+``results/run_manifest.json`` : des résultats produits avec une autre archive
+ne sont jamais repris, si bien que chaque nombre du manuscrit vient d'une seule
+exécution sur un seul ensemble d'essais.
 """
 
 from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
 import shutil
 import subprocess
@@ -54,8 +63,9 @@ REPERES = {
 class Runner:
     """Exécute les scripts du dépôt sous un budget de temps commun."""
 
-    def __init__(self, work: Path, xdf_root: Path, max_hours: float):
+    def __init__(self, work: Path, xdf_root: Path, max_hours: float, archive: str = "brut"):
         self.t0 = time.time()
+        self.archive_name = archive
         self.max_hours = max_hours
         self.work = work
         self.xdf_root = xdf_root
@@ -93,8 +103,11 @@ class Runner:
 
     # ---------------------------------------------------------------- archives
     def archive(self) -> Path:
-        """L'archive de la configuration du manuscrit, sinon celle sans ICA."""
-        return self.epochs_ica if self.epochs_ica.exists() else self.epochs
+        """L'archive de référence, la même pour toutes les analyses de décodage."""
+        return self.epochs_ica if self.archive_name == "ica" else self.epochs
+
+    def other_archive(self) -> Path:
+        return self.epochs if self.archive_name == "ica" else self.epochs_ica
 
 
 def usable(path) -> bool:
@@ -122,6 +135,8 @@ def is_our_output(name: str) -> bool:
     """
     if name.startswith("epochs"):
         return False                       # les archives ont leur propre chemin
+    if name == MANIFEST:
+        return True
     base = name
     for suffixe in (".predictions.npz", ".confusions.npz", ".rdm.npz"):
         if name.endswith(suffixe):
@@ -138,7 +153,7 @@ def flatten_into_results(r: Runner) -> None:
     l'outil il **aplatit** l'arborescence : ``results/imagine.csv`` arrive alors
     à la racine. La reprise ne le voyait pas et recalculait tout.
     """
-    for candidate in sorted([*r.work.glob("*.csv"), *r.work.glob("*.npz")]):
+    for candidate in sorted([*r.work.glob("*.csv"), *r.work.glob("*.npz"), *r.work.glob(MANIFEST)]):
         if not is_our_output(candidate.name):        # les archives restent là
             continue
         dest = r.results / candidate.name
@@ -149,9 +164,49 @@ def flatten_into_results(r: Runner) -> None:
         print(f"{candidate.name} était à la racine -> results/ (téléchargement aplati)")
 
 
+MANIFEST = "run_manifest.json"
+
+
+def read_manifest(path) -> dict:
+    try:
+        return json.loads(Path(path).read_text())
+    except Exception:
+        return {}
+
+
+def secure_results(r: Runner) -> None:
+    """Écarte les résultats locaux produits avec une autre archive, puis signe.
+
+    Des CSV sans manifeste viennent d'une exécution antérieure à cette règle :
+    on ne sait pas sur quelle archive ils ont été calculés, ils sont donc mis
+    de côté plutôt que repris.
+    """
+    present = [f for f in r.results.iterdir() if f.name != MANIFEST]
+    current = read_manifest(r.results / MANIFEST)
+    if present and current.get("archive") != r.archive_name:
+        why = current.get("archive") or "sans_manifeste"
+        dest = r.work / f"results_{why}_ecartes"
+        shutil.move(str(r.results), dest)
+        r.results.mkdir(parents=True)
+        print(f"résultats locaux d'une autre archive ({why}) déplacés dans {dest.name} : "
+              f"ils ne seront pas repris")
+    (r.results / MANIFEST).write_text(json.dumps({"archive": r.archive_name}, indent=1))
+
+
+def matching_result_dirs(r: Runner, sources) -> list[str]:
+    """Dossiers de résultats d'un run précédent fait avec la même archive."""
+    dirs = []
+    for src in sources:
+        for m in glob.glob(f"{src}/**/{MANIFEST}", recursive=True):
+            if read_manifest(m).get("archive") == r.archive_name:
+                dirs.append(str(Path(m).parent))
+    return dirs
+
+
 def recover(r: Runner, inputs: Path, extra: tuple[Path, ...] = ()) -> None:
     """Récupère archives et résultats d'un run précédent, en les validant."""
     flatten_into_results(r)
+    secure_results(r)
 
     for target in (r.epochs, r.epochs_ica):
         if target.exists() and not usable(target):
@@ -179,8 +234,12 @@ def recover(r: Runner, inputs: Path, extra: tuple[Path, ...] = ()) -> None:
     # motifs ; le filtre is_our_output empêche de ramasser les CSV des autres
     # datasets attachés au notebook
     recovered = 0
-    for src in sources:
-        for motif in ("results/*.csv", "results/*.npz", "*.csv", "*.npz"):
+    valid = matching_result_dirs(r, sources)
+    if not valid:
+        print(f"aucun résultat antérieur fait avec l'archive « {r.archive_name} » "
+              f"(manifeste {MANIFEST}) : rien n'est repris, tout sera recalculé")
+    for src in valid:
+        for motif in ("*.csv", "*.npz"):
             for candidate in glob.glob(f"{src}/**/{motif}", recursive=True):
                 name = Path(candidate).name
                 if not is_our_output(name):
@@ -233,7 +292,7 @@ def etape_temoin(r: Runner) -> None:
     """Le pipeline est-il sensible à un vrai signal ? Sans cela, rien n'est lisible."""
     print(f"  repère : {REPERES['temoin']}")
     r.run("02_benchmark.py",
-          "--epochs", r.epochs, "--condition", "articulated",
+          "--epochs", r.archive(), "--condition", "articulated",
           "--models", "puissance_lda", "cov_tangent", "xdawn_tangent_lda",
           "--schemes", "within_session", "loso",
           "--contrasts", "mots15",
@@ -273,7 +332,7 @@ def etape_montages(r: Runner) -> None:
     """
     for montage in ("complet", "machoire10", "occipital", "sans_machoire"):
         r.run("02_benchmark.py",
-              "--epochs", r.epochs, "--condition", "articulated",
+              "--epochs", r.archive(), "--condition", "articulated",
               "--montage", montage,
               "--models", "cov_tangent", "cov_tangent_lda", "xdawn_tangent_lda",
               "--schemes", "within_session", "loso",
@@ -316,7 +375,7 @@ def etape_temporel(r: Runner) -> None:
     """
     for condition in ("articulated", "imagined"):
         r.run("02_benchmark.py",
-              "--epochs", r.epochs, "--condition", condition,
+              "--epochs", r.archive(), "--condition", condition,
               "--tmin", -0.5, "--tmax", 0.0,
               "--models", "cov_tangent", "xdawn_tangent_lda",
               "--schemes", "within_session", "loso",
@@ -381,11 +440,11 @@ def etape_grille(r: Runner) -> None:
           "--models", "puissance_lda", "csp_lda", "cov_tangent", "cov_tangent_lda",
           "bankcov_tangent", "bankcov_tangent_lda", "xdawn_tangent_lda",
           "--schemes", "subblock", "within_session", "pooled_blocked", "loso",
-          "--contrasts", "mots15", "syllabes", "attaque", "semantique",
+          "--contrasts", "mots15", "attaque", "semantique",
           "pharyngale", "oui_non",
           "--n-components", 32, "--bank", "manuscrit",
           "--out", r.results / "imagine_grille.csv",
-          label="13. GRILLE COMPLÈTE — 4 schémas x 6 contrastes")
+          label="13. GRILLE COMPLÈTE — 4 schémas x 5 contrastes")
 
 
 def etape_rsa(r: Runner) -> None:
@@ -413,11 +472,69 @@ def etape_topo(r: Runner) -> None:
     # premiere lecture tombe : un reseau cortical de parole serait deja actif
     # en preparation.
     r.run("07_topomaps.py",
-          "--epochs", r.epochs, "--conditions", "articulated", "imagined",
+          "--epochs", r.archive(), "--conditions", "articulated", "imagined",
           "--windows", "production:0.0:2.0", "avant:-0.5:0.0",
           "--scheme", "loso", "--n-perm", 5000,
           "--out", r.results / "topo_electrodes.csv",
           label="14 bis. DISCRIMINABILITE PAR ELECTRODE", budget=False)
+
+
+def etape_validation(r: Runner) -> None:
+    """Validation technique, indépendante de tout décodage (lit les XDF)."""
+    if (r.results / "validation_sessions.csv").exists():
+        print("validation_sessions.csv déjà présent — étape sautée")
+        return
+    r.run("08_technical_validation.py", "--input", r.xdf_root, "--out", r.results,
+          label="VALIDATION TECHNIQUE (une lecture de chaque XDF)", budget=False)
+
+
+def etape_drapeaux(r: Runner) -> None:
+    """Son, clignement et puissance 55-95 Hz de chaque essai (lit les XDF)."""
+    if (r.results / "essais.csv").exists() and (r.results / "hf_55_95.npz").exists():
+        print("essais.csv et hf_55_95.npz déjà présents — étape sautée")
+        return
+    r.run("11_trial_flags.py", "--input", r.xdf_root, "--out", r.results,
+          label="DRAPEAUX PAR ESSAI (son, clignement, 55-95 Hz)", budget=False)
+
+
+def etape_controles(r: Runner) -> None:
+    """Le résultat imaginé tient-il sans les essais suspects, sous 26 Hz, sans le muscle ?"""
+    sorties = ("controles_exclusions.csv", "controles_26hz.csv", "controles_muscle.csv",
+               "controles_hf_hausse.csv")
+    if all((r.results / f).exists() for f in sorties):
+        print("contrôles déjà présents — étape sautée")
+        return
+    if not (r.results / "essais.csv").exists():
+        print("[SAUTE] contrôles : essais.csv absent, lancer l'étape drapeaux")
+        return
+    r.run("12_imagined_controls.py", "--epochs", r.archive(),
+          "--flags", r.results / "essais.csv", "--hf", r.results / "hf_55_95.npz",
+          "--out", r.results, label="CONTRÔLES DE LA PAROLE IMAGINÉE", budget=False)
+
+
+def etape_imbrique(r: Runner) -> None:
+    """Le chiffre principal en imaginé : la configuration choisie sans voir la session de test."""
+    if (r.results / "imbrique_resultats.csv").exists():
+        print("imbrique_resultats.csv déjà présent — étape sautée")
+        return
+    extra = ["--epochs-alt", r.other_archive()] if r.other_archive().exists() else []
+    r.run("13_nested_selection.py", "--epochs", r.archive(), *extra, "--out", r.results,
+          label="SÉLECTION IMBRIQUÉE — imaginé, 15 mots", budget=False)
+
+
+def etape_transfert(r: Runner) -> None:
+    """Un décodeur entraîné sur l'articulé lit-il l'imaginé ? L'articulé aide-t-il l'imaginé ?"""
+    if all((r.results / f).exists() for f in ("transfert.csv", "transfert_apparie.csv")):
+        print("transfert déjà présent — étape sautée")
+        return
+    r.run("15_transfer.py", "--epochs", r.archive(), "--out", r.results,
+          label="TRANSFERT ARTICULÉ -> IMAGINÉ", budget=False)
+
+
+def etape_tableau(r: Runner) -> None:
+    """Un tableau de toutes les configurations et des chiffres du manuscrit."""
+    r.run("14_master_table.py", "--results", r.results,
+          label="TABLEAU MAÎTRE", budget=False)
 
 
 def etape_figures(r: Runner) -> None:
@@ -437,17 +554,23 @@ def etape_figures(r: Runner) -> None:
 ETAPES = (
     ("timing",         etape_timing,         "la gigue est-elle voulue"),
     ("archives",       etape_archives,       "prérequis, ~33 min x2"),
+    ("validation",     etape_validation,     "validation technique, ~40 min"),
     ("temoin",         etape_temoin,         "le pipeline est-il sensible"),
-    ("reconciliation", etape_reconciliation, "le 8,1 % du manuscrit"),
-    ("montages",       etape_montages,       "dix électrodes contre soixante"),
-    ("temporel",       etape_temporel,       "fenêtre sans EMG"),
-    ("rang",           etape_rang,           "l'effet à rang plein"),
-    ("mots15",         etape_mots15,         "quelque chose dépasse-t-il 8,2 %"),
-    ("grille",         etape_grille,         "contrastes structurés"),
-    ("rsa",            etape_rsa,            "structure par paires"),
-    ("apparies",       etape_apparies,       "quel écart est réel"),
+    ("mots15",         etape_mots15,         "les dix modèles sur les 15 mots imaginés"),
+    ("imbrique",       etape_imbrique,       "le chiffre principal en imaginé"),
+    ("temporel",       etape_temporel,       "fenêtre avant le go"),
     ("topo",           etape_topo,           "où est le signal sur le scalp"),
-    ("figures",        etape_figures,        "les sept figures du manuscrit"),
+    ("drapeaux",       etape_drapeaux,       "son, clignement, 55-95 Hz, ~40 min"),
+    ("controles",      etape_controles,      "le résultat imaginé sans contamination"),
+    ("transfert",      etape_transfert,      "l'articulé se transfère-t-il à l'imaginé"),
+    ("grille",         etape_grille,         "contrastes structurés"),
+    ("reconciliation", etape_reconciliation, "avec et sans ICA"),
+    ("montages",       etape_montages,       "dix électrodes contre soixante"),
+    ("apparies",       etape_apparies,       "quel écart est réel"),
+    ("rang",           etape_rang,           "l'effet à rang plein"),
+    ("rsa",            etape_rsa,            "structure par paires"),
+    ("figures",        etape_figures,        "les figures du manuscrit"),
+    ("tableau",        etape_tableau,        "tableau maître et chiffres du manuscrit"),
 )
 
 #: sortie attendue -> (étape, ce qu'elle décide), pour nommer ce qui manque
@@ -470,10 +593,25 @@ ATTENDUS = (
     ("figures/fig2-main-result.pdf", "figures", "les deux conditions sur un axe"),
     ("figures/fig3-muscle-controls.pdf", "figures", "les trois contrôles musculaires"),
     ("figures/fig4-rank-sweep.pdf", "figures", "la courbe rang / exactitude"),
-    ("figures/fig5-contrasts.pdf", "figures", "les six contrastes sur un axe commun"),
+    ("figures/fig5-contrasts.pdf", "figures", "les cinq contrastes sur un axe commun"),
     ("figures/fig6-rsa.pdf", "figures", "dissimilarité et corrélations de Mantel"),
     ("topo_electrodes.csv", "topo", "discriminabilité électrode par électrode"),
     ("figures/fig7-topomaps.pdf", "figures", "où est le signal sur le scalp"),
+    ("validation_sessions.csv", "validation", "validation technique par session"),
+    ("validation_audio.csv", "validation", "niveau audio de chaque essai"),
+    ("essais.csv", "drapeaux", "son et clignement de chaque essai"),
+    ("hf_55_95.npz", "drapeaux", "puissance 55-95 Hz de chaque essai"),
+    ("controles_exclusions.csv", "controles", "sans les essais avec son ou clignement"),
+    ("controles_26hz.csv", "controles", "sous 26 Hz"),
+    ("controles_muscle.csv", "controles", "le muscle seul décode-t-il le mot"),
+    ("controles_hf_hausse.csv", "controles", "hausse 55-95 Hz après le go"),
+    ("imbrique_resultats.csv", "imbrique", "le chiffre principal en imaginé"),
+    ("imbrique_apparie.csv", "imbrique", "sélection imbriquée contre configuration fixe"),
+    ("imbrique_grille.csv", "imbrique", "toutes les configurations de la grille"),
+    ("transfert.csv", "transfert", "l'articulé se transfère-t-il à l'imaginé"),
+    ("transfert_apparie.csv", "transfert", "transfert et articulé ajouté contre imaginé seul"),
+    ("tableau_configurations.csv", "tableau", "chaque configuration évaluée"),
+    ("chiffres_manuscrit.csv", "tableau", "chaque nombre du manuscrit et sa source"),
 )
 
 #: les noms de sortie reconnus, pour ne récupérer que les nôtres. Inclut les
@@ -481,6 +619,9 @@ ATTENDUS = (
 CONNUS = frozenset(
     [name for name, _, _ in ATTENDUS]
     + ["rsa.csv", "imagine.csv", "benchmark.csv"]      # noms d'avant
+    + ["imbrique_choix_mots15.csv", "paires_reconciliation_brut.csv",
+       "paires_reconciliation_ica.csv", "paires_imagine_mots15.csv", "reconciliation_brut.csv",
+       "reconciliation_ica.csv"]
 )
 
 #: seuils sur les 15 mots imaginés, à 1797 essais. SEUIL_80 vaut aussi la
@@ -521,9 +662,11 @@ def bilan(r: Runner) -> None:
         if "equilibree" not in table.columns:          # tables appariées, RSA
             print(table.to_string(index=False))
             continue
-        keep = [c for c in cols if c in table.columns]
+        keep = [c for c in cols if c in table.columns] or list(table.columns)
         print(table.sort_values("equilibree", ascending=False).head(12)[keep]
               .to_string(index=False))
+        if "seuil_eq" not in table.columns:
+            continue
         above = table[table.equilibree > table.seuil_eq]
         print(f"\nau-dessus du seuil de détectabilité : {len(above)} / {len(table)}")
         if len(above):
@@ -589,6 +732,9 @@ def main() -> int:
                         help="n'exécuter que ces étapes")
     parser.add_argument("--skip", nargs="+", default=(),
                         help="sauter ces étapes")
+    parser.add_argument("--archive", choices=("brut", "ica"), default="brut",
+                        help="archive d'époques de référence, la même pour toutes les "
+                             "analyses de décodage : sans (brut) ou avec retrait oculaire")
     parser.add_argument("--list", action="store_true",
                         help="lister les étapes et sortir")
     parser.add_argument("--recover-from", nargs="+", default=(),
@@ -618,13 +764,14 @@ def main() -> int:
     xdf_root = Path(os.path.commonpath([str(Path(f).parent) for f in xdf]))
     print(f"{len(xdf)} fichiers XDF sous {xdf_root}")
 
-    r = Runner(Path(args.work), xdf_root, args.max_hours)
+    r = Runner(Path(args.work), xdf_root, args.max_hours, archive=args.archive)
     print(f"dépôt : {ROOT}")
     head = subprocess.run(["git", "-C", str(ROOT), "log", "--oneline", "-1"],
                           capture_output=True, text=True).stdout.strip()
     # imprimer le commit évite de relancer des heures sur une version périmée
     # sans le voir : c'est exactement ce qui est arrivé avec un clone en retard
     print(f"commit : {head or '(inconnu)'}")
+    print(f"archive de référence : {args.archive} ({r.archive().name})")
     print(f"budget : {args.max_hours} h\n")
 
     recover(r, inputs, tuple(Path(d) for d in args.recover_from))

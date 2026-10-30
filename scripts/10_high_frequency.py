@@ -16,8 +16,7 @@ Ce qu'il fait.
    Les sessions a 500 Hz d'origine (S006, S007) le permettent : leur limite de
    Nyquist est 250 Hz.
 2. Sur cette archive, les trois modeles de la reconciliation (ceux du 8,18 %),
-   sous les deux schemas et avec et sans recentrage, sur les 15 mots et sur le
-   nombre de syllabes, deux fois :
+   sous les deux schemas et avec et sans recentrage, sur les 15 mots, deux fois :
    - avec le banc du manuscrit (1-40 Hz), pour isoler l'effet du changement
      d'archive ;
    - avec ce banc prolonge par 55-95 et 105-120 Hz (``--bank haute``).
@@ -29,8 +28,7 @@ colonne « banc haute » depasse la colonne « banc manuscrit » sur la meme
 archive. Sinon, les deux se valent et la coupure a 45 Hz ne cache rien.
 
 Suite (``--followup``, ou ``--followup-only`` si l'etape principale est faite).
-Le premier run a montre un gain du banc haute sur le nombre de syllabes, pas sur
-les 15 mots. Deux questions restent :
+Si le banc haute semble apporter un gain, deux questions restent :
 4. Le gain est-il reel ? Test apparie sur les MEMES essais : les predictions
    par essai des deux bancs sont echangees au hasard (05_paired_compare.py),
    difference = banc haute moins banc manuscrit, Holm sur les comparaisons.
@@ -52,7 +50,7 @@ sys.path.insert(0, str(HERE.parent / "src"))
 
 MODELS = ("bankcov_tangent_lda", "cov_tangent_lda", "xdawn_tangent_lda")
 SCHEMES = ("subblock", "loso")
-CONTRASTS = ("mots15", "syllabes")
+CONTRASTS = ("mots15",)
 BANKS = ("manuscrit", "haute")
 
 
@@ -131,8 +129,6 @@ def paired_banks(results: Path, n_perm: int) -> None:
 def summary(results: Path) -> None:
     rows = []
     rows += best_rows(results / "reconciliation_brut.csv", "45 Hz, run principal")
-    rows += [r for r in best_rows(results / "imagine_grille.csv", "45 Hz, grille")
-             if r["contraste"] == "syllabes"]
     for bank in BANKS:
         rows += best_rows(results / f"hf_{bank}.csv", f"120 Hz, banc {bank}")
     for bank in BANKS:
