@@ -91,7 +91,7 @@ LIBELLES = {
     "augcov_tangent": "delay-TS + logistic", "xdawn_tangent_lda": "xDAWN-TS + sLDA",
     "complet": "full", "sans_machoire": "no jaw/occiput", "machoire10": "jaw ring",
     "peripherique14": "peripheral (14)",
-    "syllabes": "syllables", "pharyngale": "pharyngeal", "semantique": "semantic",
+    "pharyngale": "pharyngeal", "semantique": "semantic",
     "mots15": "15 words", "attaque": "onset", "oui_non": "yes / no",
     "onset_voiced": "onset voicing", "cue_length": "cue length",
     "avant": "pre-production", "isi": "ISI", "iti": "ITI",
@@ -487,9 +487,9 @@ def fig_rang(res: Path, out: Path) -> str | None:
 
 # ------------------------------------------------------------------ figure 5
 #: nombre de classes de chaque contraste, affiche sous son nom
-CLASSES_CONTRASTE = {"syllabes": 2, "pharyngale": 2, "semantique": 6, "mots15": 15,
+CLASSES_CONTRASTE = {"pharyngale": 2, "semantique": 6, "mots15": 15,
                      "attaque": 7, "oui_non": 2}
-NOMS_CONTRASTE = {"syllabes": "syllable count", "pharyngale": "pharyngeal /\u0295/",
+NOMS_CONTRASTE = {"pharyngale": "pharyngeal /\u0295/",
                   "semantique": "semantic category", "mots15": "word identity",
                   "attaque": "onset class", "oui_non": "yes / no"}
 
@@ -716,7 +716,7 @@ FIGURES = (
     ("fig2-main-result", fig_principal, "les deux conditions sur un seul axe"),
     ("fig3-muscle-controls", fig_controles, "les trois controles musculaires"),
     ("fig4-rank-sweep", fig_rang, "la courbe rang / exactitude"),
-    ("fig5-contrasts", fig_contrastes, "les six contrastes sur un axe commun"),
+    ("fig5-contrasts", fig_contrastes, "les cinq contrastes sur un axe commun"),
     ("fig6-rsa", fig_rsa, "matrices de dissimilarite et correlations de Mantel"),
     ("fig7-topomaps", fig_topo, "discriminabilite par electrode sur le scalp"),
 )
