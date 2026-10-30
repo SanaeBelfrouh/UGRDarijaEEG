@@ -522,6 +522,15 @@ def etape_imbrique(r: Runner) -> None:
           label="SÉLECTION IMBRIQUÉE — imaginé, 15 mots", budget=False)
 
 
+def etape_transfert(r: Runner) -> None:
+    """Un décodeur entraîné sur l'articulé lit-il l'imaginé ? L'articulé aide-t-il l'imaginé ?"""
+    if all((r.results / f).exists() for f in ("transfert.csv", "transfert_apparie.csv")):
+        print("transfert déjà présent — étape sautée")
+        return
+    r.run("15_transfer.py", "--epochs", r.archive(), "--out", r.results,
+          label="TRANSFERT ARTICULÉ -> IMAGINÉ", budget=False)
+
+
 def etape_tableau(r: Runner) -> None:
     """Un tableau de toutes les configurations et des chiffres du manuscrit."""
     r.run("14_master_table.py", "--results", r.results,
@@ -553,6 +562,7 @@ ETAPES = (
     ("topo",           etape_topo,           "où est le signal sur le scalp"),
     ("drapeaux",       etape_drapeaux,       "son, clignement, 55-95 Hz, ~40 min"),
     ("controles",      etape_controles,      "le résultat imaginé sans contamination"),
+    ("transfert",      etape_transfert,      "l'articulé se transfère-t-il à l'imaginé"),
     ("grille",         etape_grille,         "contrastes structurés"),
     ("reconciliation", etape_reconciliation, "avec et sans ICA"),
     ("montages",       etape_montages,       "dix électrodes contre soixante"),
@@ -598,6 +608,8 @@ ATTENDUS = (
     ("imbrique_resultats.csv", "imbrique", "le chiffre principal en imaginé"),
     ("imbrique_apparie.csv", "imbrique", "sélection imbriquée contre configuration fixe"),
     ("imbrique_grille.csv", "imbrique", "toutes les configurations de la grille"),
+    ("transfert.csv", "transfert", "l'articulé se transfère-t-il à l'imaginé"),
+    ("transfert_apparie.csv", "transfert", "transfert et articulé ajouté contre imaginé seul"),
     ("tableau_configurations.csv", "tableau", "chaque configuration évaluée"),
     ("chiffres_manuscrit.csv", "tableau", "chaque nombre du manuscrit et sa source"),
 )
