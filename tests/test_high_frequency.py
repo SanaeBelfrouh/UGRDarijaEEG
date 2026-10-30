@@ -55,7 +55,7 @@ def test_broadband_analysis_runs_end_to_end():
         assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-1500:]
         for bank in ("manuscrit", "haute"):
             t = pd.read_csv(tmp / "results" / f"hf_{bank}.csv")
-            assert set(t.contraste) == {"mots15", "syllabes"}, set(t.contraste)
+            assert set(t.contraste) == {"mots15"}, set(t.contraste)
             assert set(t.recentre) == {True, False}
         assert "BILAN" in r.stdout and "120 Hz, banc haute" in r.stdout
 
@@ -69,13 +69,13 @@ def test_followup_pairs_the_two_banks_and_runs_the_pre_go_window():
                  "--epochs", arch, "--n-perm", 20, "--followup-only")
         assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-1500:]
         t = pd.read_csv(tmp / "results" / "hf_paired_banks.csv")
-        # 2 schemas x 2 recentrages x 2 contrastes, chacun sur les memes essais
-        assert len(t) == 8, t
+        # 2 schemas x 2 recentrages, chacun sur les memes essais
+        assert len(t) == 4, t
         assert t.nulle_moy.abs().max() < 0.05, t.nulle_moy
         assert (t.p_holm >= t.p_apparie).all()
         for bank in ("manuscrit", "haute"):
             pre = pd.read_csv(tmp / "results" / f"hf_pre_{bank}.csv")
-            assert set(pre.contraste) == {"mots15", "syllabes"}
+            assert set(pre.contraste) == {"mots15"}
         assert "TEST APPARIE" in r.stdout and "avant go, banc haute" in r.stdout
 
 

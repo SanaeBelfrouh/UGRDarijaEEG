@@ -8,9 +8,11 @@ grandeur sans enregistrer un seul essai de plus.
 
 Les regroupements ci-dessous sont des hypotheses, pas des verites. Ils encodent
 ce qui est lisible depuis la transcription en arabizi et le sens des mots ; une
-locutrice native doit relire ``WORD_FEATURES`` et corriger, en particulier le
-nombre de syllabes de ``dwa``, ``lma``, ``lla`` et ``tbib``, dont la
-syllabation depend du debit.
+locutrice native doit relire ``WORD_FEATURES`` et corriger.
+
+Le nombre de syllabes n'est pas annote : la syllabation de plusieurs mots
+(``dwa``, ``lma``, ``lla``, ``tbib``) depend du debit, et le contraste qu'il
+definissait etait confondu avec la duree, la longueur ecrite et la pharyngale.
 """
 
 from __future__ import annotations
@@ -21,42 +23,41 @@ from . import WORDS
 
 #: Une entree par mot :
 #:   gloss        traduction
-#:   syllables    nombre de syllabes en debit normal (A VERIFIER)
 #:   onset        classe articulatoire du premier phoneme
 #:   onset_voiced le premier phoneme est-il voise
 #:   pharyngeal   le mot contient-il la pharyngale /ʕ/ (note 3 en arabizi)
 #:   semantic     categorie d'usage
 #:   polarity     'yes' / 'no' / None
 WORD_FEATURES: dict[str, dict] = {
-    "3afak":   dict(gloss="s'il te plait", syllables=2, onset="pharyngeal", onset_voiced=True,
+    "3afak":   dict(gloss="s'il te plait", onset="pharyngeal", onset_voiced=True,
                     pharyngeal=True,  semantic="politesse", polarity=None),
-    "3awnni":  dict(gloss="aide-moi",      syllables=2, onset="pharyngeal", onset_voiced=True,
+    "3awnni":  dict(gloss="aide-moi",      onset="pharyngeal", onset_voiced=True,
                     pharyngeal=True,  semantic="requete",  polarity=None),
-    "3tini":   dict(gloss="donne-moi",     syllables=2, onset="pharyngeal", onset_voiced=True,
+    "3tini":   dict(gloss="donne-moi",     onset="pharyngeal", onset_voiced=True,
                     pharyngeal=True,  semantic="requete",  polarity=None),
-    "3yan":    dict(gloss="fatigue",       syllables=2, onset="pharyngeal", onset_voiced=True,
+    "3yan":    dict(gloss="fatigue",       onset="pharyngeal", onset_voiced=True,
                     pharyngeal=True,  semantic="etat",     polarity=None),
-    "Ah":      dict(gloss="oui",           syllables=1, onset="glottal",    onset_voiced=False,
+    "Ah":      dict(gloss="oui",           onset="glottal",    onset_voiced=False,
                     pharyngeal=False, semantic="polarite", polarity="yes"),
-    "bghit":   dict(gloss="je veux",       syllables=1, onset="plosive",    onset_voiced=True,
+    "bghit":   dict(gloss="je veux",       onset="plosive",    onset_voiced=True,
                     pharyngeal=False, semantic="requete",  polarity=None),
-    "dwa":     dict(gloss="medicament",    syllables=2, onset="plosive",    onset_voiced=True,
+    "dwa":     dict(gloss="medicament",    onset="plosive",    onset_voiced=True,
                     pharyngeal=False, semantic="objet",    polarity=None),
-    "kul":     dict(gloss="mange",         syllables=1, onset="plosive",    onset_voiced=False,
+    "kul":     dict(gloss="mange",         onset="plosive",    onset_voiced=False,
                     pharyngeal=False, semantic="action",   polarity=None),
-    "lla":     dict(gloss="non",           syllables=1, onset="lateral",    onset_voiced=True,
+    "lla":     dict(gloss="non",           onset="lateral",    onset_voiced=True,
                     pharyngeal=False, semantic="polarite", polarity="no"),
-    "lma":     dict(gloss="eau",           syllables=1, onset="lateral",    onset_voiced=True,
+    "lma":     dict(gloss="eau",           onset="lateral",    onset_voiced=True,
                     pharyngeal=False, semantic="objet",    polarity=None),
-    "makla":   dict(gloss="nourriture",    syllables=2, onset="nasal",      onset_voiced=True,
+    "makla":   dict(gloss="nourriture",    onset="nasal",      onset_voiced=True,
                     pharyngeal=False, semantic="objet",    polarity=None),
-    "n3es":    dict(gloss="dormir",        syllables=1, onset="nasal",      onset_voiced=True,
+    "n3es":    dict(gloss="dormir",        onset="nasal",      onset_voiced=True,
                     pharyngeal=True,  semantic="action",   polarity=None),
-    "shukran": dict(gloss="merci",         syllables=2, onset="fricative",  onset_voiced=False,
+    "shukran": dict(gloss="merci",         onset="fricative",  onset_voiced=False,
                     pharyngeal=False, semantic="politesse", polarity=None),
-    "tbib":    dict(gloss="medecin",       syllables=2, onset="plosive",    onset_voiced=False,
+    "tbib":    dict(gloss="medecin",       onset="plosive",    onset_voiced=False,
                     pharyngeal=False, semantic="objet",    polarity=None),
-    "wqef":    dict(gloss="arrete",        syllables=1, onset="glide",      onset_voiced=True,
+    "wqef":    dict(gloss="arrete",        onset="glide",      onset_voiced=True,
                     pharyngeal=False, semantic="action",   polarity=None),
 }
 
@@ -80,12 +81,6 @@ def contrast_yes_no(y):
     return labels, mask
 
 
-def contrast_syllables(y):
-    """Une contre deux syllabes. Si l'imagerie porte une trace temporelle, c'est
-    la dimension la plus susceptible de la reveler."""
-    return _mapped(y, "syllables").astype(str), None
-
-
 def contrast_onset(y):
     """Classe articulatoire du premier phoneme."""
     return _mapped(y, "onset"), None
@@ -104,7 +99,6 @@ def contrast_semantic(y):
 CONTRASTS = {
     "mots15":      (contrast_15, 1 / 15),
     "oui_non":     (contrast_yes_no, 1 / 2),
-    "syllabes":    (contrast_syllables, None),
     "attaque":     (contrast_onset, None),
     "pharyngale":  (contrast_pharyngeal, None),
     "semantique":  (contrast_semantic, None),

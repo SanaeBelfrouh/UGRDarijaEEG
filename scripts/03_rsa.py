@@ -40,8 +40,8 @@ warnings.filterwarnings("ignore")
 #: est decode est en partie orthographique. Un indice visuel engage
 #: l'orthographe quel que soit l'alphabet, donc l'objection se pose pour
 #: n'importe quelle transcription ; la mesurer vaut mieux que l'argumenter.
-MODEL_KEYS = ("syllables", "onset", "onset_voiced", "pharyngeal", "semantic",
-              "orthographic", "cue_length")
+MODEL_KEYS = ("onset", "onset_voiced", "pharyngeal", "semantic", "orthographic",
+              "cue_length")
 
 
 def main() -> int:

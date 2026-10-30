@@ -297,11 +297,11 @@ def test_shared_folds_match_independent_evaluation():
     reps = build_representations(X, sfreq, bands=((8.0, 13.0),), include=("cov",))
 
     together = evaluate_many(reps, y, groups, order, model="cov_tangent",
-                             scheme="loso", contrasts=("mots15", "syllabes"), n_perm=100)
+                             scheme="loso", contrasts=("mots15", "pharyngale"), n_perm=100)
     separate = [
         evaluate(reps, y, groups, order, model="cov_tangent", scheme="loso",
                  contrast=name, n_perm=100)
-        for name in ("mots15", "syllabes")
+        for name in ("mots15", "pharyngale")
     ]
     for a, b in zip(together, separate):
         assert a.contrast == b.contrast
@@ -869,7 +869,7 @@ def test_orthographic_rdm_is_a_separable_control():
 
     for key in ORTHOGRAPHIC_KEYS:
         ortho = model_rdm(labels, key)[idx]
-        for autre in ("syllables", "onset", "pharyngeal", "semantic"):
+        for autre in ("onset", "pharyngeal", "semantic"):
             rho = stats.spearmanr(ortho, model_rdm(labels, autre)[idx]).statistic
             assert abs(rho) < 0.6, (
                 f"{key} correle a {autre} a rho = {rho:+.3f} : un resultat "

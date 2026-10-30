@@ -31,8 +31,8 @@ pour la vitesse ; l'identite des predictions avec scikit-learn est verifiee au
 debut.
 
 Sorties : ``imbrique_resultats.csv`` (grille complete, ensemble des trois
-meilleures, grille stricte, grille sous 30 Hz, pour les 15 mots et le nombre de
-syllabes), ``imbrique_apparie.csv`` (comparaison appariee avec la configuration
+meilleures, grille stricte, grille sous 30 Hz, pour les 15 mots),
+``imbrique_apparie.csv`` (comparaison appariee avec la configuration
 du manuscrit sur les memes essais), ``imbrique_grille.csv`` (chaque
 configuration evaluee directement, pour transparence seulement),
 ``imbrique_choix_<contraste>.csv`` (configuration choisie dans chaque pli).
@@ -302,19 +302,17 @@ def main() -> int:
     a = loaded["reference"]
     Xr, _ = crop(a["X"][keys["pos_reference"].values].astype(np.float64), a["times"], *WINDOW)
     reps = build_representations(Xr, float(a["sfreq"]), bands=MANUSCRIPT_BANK,
-                                 include=("bankcov", "cov"), n_components=32, groups=ses,
+                                 include=("bankcov",), n_components=32, groups=ses,
                                  rank_scope="global")
     del Xr
     published = {
         "mots15": evaluate_many(reps, y, ses, tix, model="bankcov_tangent_lda", contrasts=("mots15",),
                                 recenter=False, n_perm=args.n_perm)[0],
-        "syllabes": evaluate_many(reps, y, ses, tix, model="cov_tangent_lda", contrasts=("syllabes",),
-                                  recenter=True, n_perm=args.n_perm)[0],
     }
 
     nested = Nested()
     results, paired, grid = [], [], []
-    for contrast in ("mots15", "syllabes"):
+    for contrast in ("mots15",):
         labels, mask, _ = apply_contrast(contrast, y)
         labels = np.asarray(labels, dtype=object)
         g = ses[mask]

@@ -16,9 +16,8 @@ in Moroccan Darija.
 > so that the leaks which inflate many published imagined-speech results are
 > impossible by construction, and every accuracy is reported next to the
 > smallest accuracy the sample size could detect. The honest headline is that
-> **articulated speech decodes well, imagined speech decodes at the resolution
-> limit of the corpus, and one phonological contrast (syllable count) survives
-> correction in one configuration but not a change of pipeline.**
+> **articulated speech decodes well, and imagined speech decodes at the
+> resolution limit of the corpus.**
 
 ---
 
@@ -56,9 +55,9 @@ significance threshold is **7.63 %** and the smallest accuracy detectable with
 | Does the pipeline detect a real signal? (positive control) | **Yes.** Articulated speech decodes at **30.5 %** across sessions and **43.3 %** within session — 4.6× and 6.5× chance, p < 0.001. |
 | Can the 15 *imagined* words be decoded? | **Barely.** Best result **8.18 %** (p = 0.005), i.e. exactly at the detectability bound. **0 of 32** configurations survive Holm correction. |
 | Is any method better than another on imagined speech? | **No.** **0 of 148** paired comparisons (same trials, 10 representations, 4 cross-validation schemes, with/without recentring) is significant. |
-| Is *anything* decodable from imagined speech after correction? | **A candidate only — syllable count** (1 vs 2 syllables): **54.1 %** against 50 % chance, across sessions, Holm p = 0.018, in one configuration. It is lost when the pipeline is chosen by nested cross-validation (50.6 %, p = 0.33) or restricted to frequencies below 26 Hz (51.1 %, p = 0.18). |
+| Do coarser contrasts (onset class, pharyngeal, semantic category, yes/no) do better? | **No.** None survives Holm correction; the nearest misses are the pharyngeal contrast (Holm p = 0.053) and the semantic category (Holm p = 0.079). |
 | Does a better pipeline break the imagined ceiling? | **No.** None of 36 candidate pipelines, selected by nested leave-one-session-out cross-validation without access to the test session, exceeds it. |
-| In which frequencies is the imagined information? | **26–45 Hz.** Both imagined effects disappear below 26 Hz. Muscle activity above 55 Hz carries no word or syllable information in imagined trials, but a muscular contribution between 26 and 45 Hz cannot be excluded without EMG. |
+| In which frequencies is the imagined information? | **26–45 Hz.** The imagined effect disappears below 26 Hz. Muscle activity above 55 Hz carries no word information in imagined trials, but a muscular contribution between 26 and 45 Hz cannot be excluded without EMG. |
 | Is articulated decoding cortical speech, or muscle? | **Largely peripheral (muscle).** Three independent controls converge (see [§9.4](#94-articulated-decoding-is-largely-peripheral)). |
 | Does the written cue contaminate imagined speech? | **No evidence of it.** The pre-production window is at chance, and the orthographic similarity model is flat (ρ = −0.03). |
 
@@ -102,27 +101,28 @@ politeness formulae and yes/no. They were presented in **arabizi**, the Latin
 transcription of Darija in everyday use in Morocco, where the digit `3` stands
 for the pharyngeal consonant /ʕ/.
 
-| Word (arabizi) | English | Syllables* | Onset class | Pharyngeal /ʕ/ | Semantic category |
-|---|---|:-:|---|:-:|---|
-| `3afak` | please | 2 | pharyngeal | ✓ | politeness |
-| `3awnni` | help me | 2 | pharyngeal | ✓ | request |
-| `3tini` | give me | 2 | pharyngeal | ✓ | request |
-| `3yan` | tired | 2 | pharyngeal | ✓ | state |
-| `Ah` | yes | 1 | glottal | | polarity |
-| `bghit` | I want | 1 | plosive | | request |
-| `dwa` | medicine | 2 | plosive | | object |
-| `kul` | eat | 1 | plosive | | action |
-| `lla` | no | 1 | lateral | | polarity |
-| `lma` | water | 1 | lateral | | object |
-| `makla` | food | 2 | nasal | | object |
-| `n3es` | sleep | 1 | nasal | ✓ | action |
-| `shukran` | thank you | 2 | fricative | | politeness |
-| `tbib` | doctor | 2 | plosive | | object |
-| `wqef` | stop | 1 | glide | | action |
+| Word (arabizi) | English | Onset class | Pharyngeal /ʕ/ | Semantic category |
+|---|---|---|:-:|---|
+| `3afak` | please | pharyngeal | ✓ | politeness |
+| `3awnni` | help me | pharyngeal | ✓ | request |
+| `3tini` | give me | pharyngeal | ✓ | request |
+| `3yan` | tired | pharyngeal | ✓ | state |
+| `Ah` | yes | glottal | | polarity |
+| `bghit` | I want | plosive | | request |
+| `dwa` | medicine | plosive | | object |
+| `kul` | eat | plosive | | action |
+| `lla` | no | lateral | | polarity |
+| `lma` | water | lateral | | object |
+| `makla` | food | nasal | | object |
+| `n3es` | sleep | nasal | ✓ | action |
+| `shukran` | thank you | fricative | | politeness |
+| `tbib` | doctor | plosive | | object |
+| `wqef` | stop | glide | | action |
 
-\* Darija admits consonant-nucleus syllables, so the syllabification of `dwa`,
-`lma`, `lla` and `tbib` depends on speech rate. The annotation used here is
-encoded in `src/darija/contrasts.py` (`WORD_FEATURES`).
+The annotation used here is encoded in `src/darija/contrasts.py`
+(`WORD_FEATURES`). The number of syllables is not annotated: Darija admits
+consonant-nucleus syllables, so the syllabification of `dwa`, `lma`, `lla` and
+`tbib` depends on speech rate.
 
 ### 2.3 Trial structure
 
@@ -241,7 +241,7 @@ UGRDarijaEEG/
 │   ├── riemann.py            Riemannian geometry: means, tangent space, per-session recentring
 │   ├── pipelines.py          the 10 models (scikit-learn pipelines)
 │   ├── cv.py                 the 4 cross-validation schemes
-│   ├── contrasts.py          word annotations and the 6 contrasts (15 words, syllables, ...)
+│   ├── contrasts.py          word annotations and the 5 contrasts (15 words, onset, ...)
 │   ├── montages.py           electrode subsets used for the muscle-artifact controls
 │   ├── evaluate.py           fold-shared evaluation, balanced accuracy, permutation tests
 │   ├── stats.py              detectability bounds, Holm correction, paired permutation test
@@ -383,7 +383,7 @@ python scripts/01_build_epochs.py --input /path/to/xdf --out epochs_ica.npz --re
 # 2. Benchmark grid: models x cross-validation schemes x contrasts
 python scripts/02_benchmark.py --epochs epochs.npz --condition imagined --recenter \
     --models cov_tangent_lda bankcov_tangent_lda --schemes loso subblock \
-    --contrasts mots15 syllabes --bank manuscrit --out results/imagined.csv
+    --contrasts mots15 pharyngale --bank manuscrit --out results/imagined.csv
 
 #    positive control: must come out clearly above chance
 python scripts/02_benchmark.py --epochs epochs.npz --condition articulated
@@ -414,7 +414,7 @@ python scripts/09_audio_review.py --input /path/to/xdf --out results/audio_revie
 
 # 10. Sensitivity analysis above 45 Hz, imagined speech only: a second archive
 #     filtered 0.5-120 Hz at 500 Hz, the three reconciliation models on the 15
-#     words and on syllable count, with the manuscript bank (1-40 Hz) and with
+#     words, with the manuscript bank (1-40 Hz) and with
 #     it extended by 55-95 and 105-120 Hz (--bank haute); prints a comparison
 #     with the 45 Hz results found in <work>/results (~40 min + a few hours)
 python scripts/10_high_frequency.py --input /path/to/xdf --work <working folder>
@@ -452,7 +452,7 @@ python scripts/14_master_table.py --results results
 | `--condition` | `imagined`, `articulated` or `both` |
 | `--models` | any of the models in the table below |
 | `--schemes` | `loso`, `within_session`, `pooled_blocked`, `subblock` |
-| `--contrasts` | `mots15`, `syllabes`, `attaque`, `pharyngale`, `semantique`, `oui_non` |
+| `--contrasts` | `mots15`, `attaque`, `pharyngale`, `semantique`, `oui_non` |
 | `--recenter` | also evaluate the per-session Riemannian-recentred variant |
 | `--n-components` | rank reduction before covariance estimation (default 32; 0 = full rank) |
 | `--rank-scope` | `global` (one basis for all sessions, default) or `session` |
@@ -493,7 +493,6 @@ python scripts/14_master_table.py --results results
 | Name | Classes | Description |
 |---|:-:|---|
 | `mots15` | 15 | word identity |
-| `syllabes` | 2 | 1 vs 2 syllables |
 | `attaque` | several | articulatory class of the first phoneme |
 | `pharyngale` | 2 | word contains /ʕ/ or not |
 | `semantique` | 6 | request / object / action / state / polarity / politeness |
@@ -620,45 +619,25 @@ a weak imagined result would be indistinguishable from a broken pipeline.
 - Restricting the representations to frequencies below 26 Hz brings the
   fifteen-word result to chance (6.8 %, p = 0.40).
 
-> The nested-selection and frequency-restriction analyses of §9.2–9.3 are steps
+> The nested-selection and frequency-restriction analyses of §9.2 are steps
 > `imbrique` and `controles` of `run_all.py` (scripts 13 and 12). The values in
 > this section come from earlier, separate runs and will be replaced by those of
 > the single execution.
 
-### 9.3 Syllable count: a candidate effect
+### 9.3 Structured contrasts
 
-Across 264 configurations of six structured contrasts, two survive Holm
-correction — the same contrast under two models:
+Grouping the fifteen words into fewer classes raises the number of trials per
+class and lowers the detectability bound. Across the configurations of five
+contrasts (word identity, onset class, pharyngeal /ʕ/, semantic category,
+yes/no), **none survives Holm correction**. Nearest misses: pharyngeal contrast
+(53.71 %, bound 53.11 %, p<sub>Holm</sub> = 0.053) and semantic category
+(19.39 % on 6 classes, bound 19.08 %, p<sub>Holm</sub> = 0.079).
 
-| Contrast | Classes | Model | Scheme | Balanced acc. | Bound | p | p (Holm) |
-|---|:-:|---|---|---:|---:|---:|---:|
-| syllable count | 2 | cov. tangent + shrinkage LDA | LOSO, recentred | **54.14 %** | 52.94 % | 0.0004 | **0.0176** |
-| syllable count | 2 | cov. tangent + logistic | LOSO, recentred | 54.06 % | 52.94 % | 0.0004 | **0.0176** |
-
-Nearest misses: pharyngeal contrast (53.71 %, bound 53.11 %, p<sub>Holm</sub> =
-0.053) and semantic category (19.39 % on 6 classes, bound 19.08 %,
-p<sub>Holm</sub> = 0.079).
-
-Going from fifteen classes to two makes the effect resolvable *without recording
-a single additional trial*: a signal is present, but too weak for a 15-way
-decision at this sample size.
-
-**Caveat.** Holm is applied within each contrast family. Six contrasts were
-tested; an additional correction across families would bring 0.0176 to ≈ 0.11.
-The contrasts were pre-specified from Darija phonology rather than derived from
-the data, but both levels should be reported. Four words (*dwa*, *lma*, *lla*,
-*tbib*) have an ambiguous syllable count, because Moroccan Darija admits
-consonant-nucleus syllables.
-
-**Robustness.** The effect depends on the pipeline. When preprocessing, filter
-bank, rank and Riemannian geometry are chosen among 36 candidates by nested
-leave-one-session-out cross-validation inside the training sessions, syllable
-count decodes at **50.6 %** (p = 0.33), against 54.95 % for the configuration
-above on the same 1753 trials. It also falls to **51.1 %** (p = 0.18) when the
-representation is restricted to frequencies below 26 Hz. Excluding imagined
-trials with a sound or a blink in the production window leaves it unchanged
-(54.2–54.6 %). It is therefore reported as a **candidate for confirmatory
-testing** in new recordings, with the configuration fixed in advance.
+A syllable-count contrast (one against two syllables) was evaluated in earlier
+runs and has been withdrawn: the syllabification of several words depends on
+speech rate, and the contrast is confounded with word duration, written length
+and the pharyngeal. Testing such a contrast properly needs a classifier
+evaluated on words held out from training (leave-one-word-out).
 
 ### 9.4 Articulated decoding is largely peripheral
 
@@ -721,7 +700,7 @@ per-session basis at every rank.
 ### 9.6 Representational similarity
 
 Spearman correlation between the cross-validated (crossnobis) dissimilarity
-matrix of the 15 words and seven model matrices; Mantel test permuting word
+matrix of the 15 words and six model matrices; Mantel test permuting word
 order; Holm correction within condition. **Nothing is significant.**
 
 | Model | Imagined ρ | p (Holm) | Articulated ρ | p (Holm) |
@@ -729,7 +708,6 @@ order; Holm correction within condition. **Nothing is significant.**
 | semantic category | +0.158 | 0.267 | +0.006 | 0.804 |
 | cue length | +0.148 | 0.629 | +0.118 | 0.738 |
 | pharyngeal presence | +0.128 | 0.629 | +0.131 | 0.645 |
-| syllable count | +0.106 | 0.625 | +0.006 | 0.804 |
 | onset class | +0.019 | 1.000 | +0.225 | 0.117 |
 | orthographic edit distance | −0.031 | 1.000 | +0.215 | 0.239 |
 | onset voicing | −0.054 | 1.000 | +0.080 | 0.738 |
@@ -750,10 +728,8 @@ order; Holm correction within condition. **Nothing is significant.**
 > peripheral. Imagined speech decodes at 8.2 % against 6.7 % chance; ten
 > representations and four validation schemes are indistinguishable from one
 > another, and the best result sits at the detectability bound of 1800 trials.
-> No pipeline selected without access to the test session exceeds that ceiling.
-> One contrast, syllable count, survives correction in one configuration
-> (54.1 % against 50 % chance across sessions) but not a change of pipeline, and
-> remains a candidate for confirmation. Both imagined effects lie at 26–45 Hz,
+> No pipeline selected without access to the test session exceeds that ceiling,
+> and no coarser contrast survives correction. The imagined effect lies at 26–45 Hz,
 > where a muscular contribution cannot be excluded without EMG. In the absence of any
 > measure of compliance with the imagery task, all reported accuracies are lower
 > bounds.
@@ -878,7 +854,7 @@ the augmented signal at full size).
 - **No dedicated EMG.** Peripheral EEG electrodes stand in for surface EMG. The
   imagined-speech information lies at 26–45 Hz, where cortical beta and
   low-gamma rhythms mix with the low-frequency tail of muscle activity; activity
-  above 55 Hz, where muscle dominates, carries no word or syllable information
+  above 55 Hz, where muscle dominates, carries no word information
   in imagined trials, but a muscular contribution between 26 and 45 Hz cannot be
   excluded without electromyography.
 - **Written cue.** The cue was shown in arabizi (read automatically by the
