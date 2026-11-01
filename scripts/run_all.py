@@ -681,10 +681,10 @@ SEUIL_SIG, SEUIL_80, SEUIL_95 = 0.0763, 0.0813, 0.0860
 LIBELLES = ("source", "condition", "fenetre", "electrode", "modele", "procedure", "schema",
             "contraste", "recentre", "montage", "passe_bas", "rang", "portee", "exclusion",
             "essais_retenus", "bandes", "caracteristiques", "pretraitement", "geometrie",
-            "configuration_a", "configuration_b", "reference")
+            "configuration_a", "configuration_b", "reference", "session", "groupe")
 MESURES = ("essais", "equilibree", "hasard_eq", "seuil_eq", "p_perm", "p", "p_holm",
            "difference", "difference_points", "p_apparie", "rho_spearman", "p_mantel",
-           "dissimilarite_moyenne", "nulle_moy")
+           "dissimilarite_moyenne", "nulle_moy", "hausse_db")
 #: tables à une ligne par essai : on n'en imprime qu'un résumé
 PAR_ESSAI = ("timing.csv", "validation_audio.csv", "essais.csv")
 LIGNES_MAX = 12
@@ -744,8 +744,11 @@ def resume_table(name: str, table, question: str) -> None:
             above = g[g.equilibree > g.seuil_eq]
             ligne = f"\n{nom + ' : ' if nom else ''}au-dessus du seuil de détectabilité : " \
                     f"{len(above)} / {len(g)}"
-            if "significatif_holm" in g.columns:
-                ligne += f" ; survivent à Holm : {int(g.significatif_holm.astype(bool).sum())} / {len(g)}"
+            # dans le tableau maître, les fichiers sans Holm ont NaN : astype(bool)
+            # en faisait True, d'où « 30 / 30 » pour rank_sweep
+            if "significatif_holm" in g.columns and g.significatif_holm.notna().any():
+                h = g.significatif_holm.dropna()
+                ligne += f" ; survivent à Holm : {int(h.eq(True).sum())} / {len(h)}"
             print(ligne)
             if len(above) and groupes != ["source"]:   # le détail est dans les fichiers sources
                 print(above.sort_values("equilibree", ascending=False).head(LIGNES_MAX)[keep]
