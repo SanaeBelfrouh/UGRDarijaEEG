@@ -52,6 +52,13 @@ MONTAGES: dict[str, dict] = {
                          note="centrales et frontales"),
     "sans_machoire": dict(keep=None, drop=JAW_RING + OCCIPITAL,
                           note="complet moins mâchoire et occiput"),
+    # les deux suivants separent ce que sans_machoire retire ensemble : le
+    # transfert articule -> imagine depend-il de l'anneau mandibulaire (muscle,
+    # mouvement) ou de l'occiput (reponse visuelle a l'indice) ?
+    "sans_machoire_seule": dict(keep=None, drop=JAW_RING,
+                                note="complet moins l'anneau mandibulaire seul"),
+    "sans_occipital": dict(keep=None, drop=OCCIPITAL,
+                           note="complet moins les occipitales seules"),
 }
 
 

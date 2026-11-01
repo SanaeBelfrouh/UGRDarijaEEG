@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Etape 6 : les six figures du manuscrit, depuis les CSV de resultats.
+"""Etape 6 : les figures du manuscrit, depuis les CSV de resultats.
 
 Les figures sont produites par le pipeline et non a la main, pour la meme raison
 que les chiffres : si un resultat change, la figure change avec lui. Les noms de
@@ -711,6 +711,142 @@ def fig_topo(res: Path, out: Path) -> str | None:
     return None
 
 
+# ------------------------------------------------------------------ figure 9
+#: libelles des procedures de la selection imbriquee (scripts/13)
+PROCEDURES = {
+    "configuration du manuscrit": "fixed configuration (FB-TS + sLDA)",
+    "selection imbriquee": "nested selection",
+    "selection imbriquee, ensemble des 3 meilleures": "nested, mean of the 3 best",
+    "selection imbriquee, grille stricte": "nested, no test-session statistic",
+    "selection imbriquee, sous 30 Hz": "nested, below 30 Hz",
+}
+
+
+def fig_robustesse(res: Path, out: Path) -> str | None:
+    src = res / "imbrique_resultats.csv"
+    if not src.exists():
+        return "imbrique_resultats.csv absent (etape imbrique)"
+    t = pd.read_csv(src)
+    t = t[t.contraste == "mots15"].reset_index(drop=True)
+    if not len(t):
+        return "aucune ligne mots15"
+    grille = res / "imbrique_grille.csv"
+    g = pd.read_csv(grille) if grille.exists() else None
+    if g is not None:
+        g = g[g.contraste == "mots15"]
+    b = bornes(int(t.essais.max()), 15)
+
+    lignes = list(t.procedure)
+    n = len(lignes) + (1 if g is not None and len(g) else 0)
+    fig, ax = plt.subplots(figsize=(6.6, 0.42 * n + 1.3))
+    trace_bornes(ax, b, horizontal=False)
+    for i, r in t.iterrows():
+        y = n - 1 - i
+        fixe = r.procedure == "configuration du manuscrit"
+        plein = r.p < 0.05
+        ax.plot(r.equilibree, y, "D" if fixe else "o", ms=7 if fixe else 6,
+                mfc=COULEURS["imagine"] if plein else "white", mec=COULEURS["imagine"],
+                mew=1.4, zorder=3)
+        ax.annotate(f"{100 * r.equilibree:.2f} %  (p = {r.p:.3f})", (r.equilibree, y),
+                    xytext=(8, 0), textcoords="offset points", va="center", fontsize=7.5)
+    etiquettes = [PROCEDURES.get(p_, p_) for p_ in lignes]
+    if g is not None and len(g):
+        ax.plot([g.equilibree.min(), g.equilibree.max()], [n - 1 - len(lignes)] * 2,
+                color=COULEURS["neutre"], lw=3, solid_capstyle="butt", zorder=2)
+        etiquettes.append(f"{len(g)} grid pipelines, range")
+    ax.set(yticks=range(n), xlabel="balanced accuracy, fifteen imagined words",
+           ylim=(-0.7, n - 0.3))
+    ax.set_yticklabels(list(reversed(etiquettes)))
+    h, l = ax.get_legend_handles_labels()
+    ax.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, -0.32 if n < 5 else -0.18),
+              ncol=4, frameon=False)
+    fig.tight_layout()
+    fig.savefig(out / "fig9-robustness.pdf")
+    plt.close(fig)
+    return None
+
+
+# ----------------------------------------------------------------- figure 12
+def fig_temporel(res: Path, out: Path) -> str | None:
+    src = res / "decodage_temporel.csv"
+    if not src.exists():
+        return "decodage_temporel.csv absent (etape fenetres)"
+    t = pd.read_csv(src)
+    c = res / "decodage_temporel_clusters.csv"
+    cl = pd.read_csv(c) if c.exists() else pd.DataFrame()
+    conditions = [x for x in ("articulated", "imagined") if x in set(t.condition)]
+    fig, axes = plt.subplots(len(conditions), 1, figsize=(6.6, 2.5 * len(conditions)),
+                             sharex=True, squeeze=False)
+    styles = {False: ("o", "-", "without recentring"), True: ("s", "--", "with recentring")}
+    for ax, cond in zip(axes[:, 0], conditions):
+        g = t[t.condition == cond]
+        trace_bornes(ax, bornes(int(g.essais.max()), 15))
+        couleur = COULEURS["articule" if cond == "articulated" else "imagine"]
+        for rec, (marq, trait, nom) in styles.items():
+            s_ = g[g.recentre == rec].sort_values("centre_s")
+            if not len(s_):
+                continue
+            ax.plot(s_.centre_s, s_.equilibree, marker=marq, ls=trait, ms=3, lw=1.1,
+                    color=couleur, mfc=couleur if not rec else "white", label=nom, zorder=3)
+            if len(cl):
+                for r in cl[(cl.condition == cond) & (cl.recentre == rec) & (cl.p_cluster < 0.05)].itertuples():
+                    ax.axvspan(r.debut_s, r.fin_s, color=couleur, alpha=0.12 if not rec else 0.07, lw=0)
+        ax.axvline(0.0, color="black", lw=0.8)
+        ax.set_ylabel("balanced accuracy")
+        ax.annotate(cond, (0.01, 0.97), xycoords="axes fraction", va="top", fontsize=9)
+    axes[-1, 0].set_xlabel("window centre (s), relative to the go signal")
+    h, l = axes[0, 0].get_legend_handles_labels()
+    vus = dict(zip(l, h))
+    fig.legend(vus.values(), vus.keys(), loc="lower center", ncol=3, frameon=False,
+               bbox_to_anchor=(0.5, -0.04))
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    fig.savefig(out / "fig12-time-resolved.pdf")
+    plt.close(fig)
+    return None
+
+
+# ----------------------------------------------------------------- figure 13
+def fig_erders(res: Path, out: Path) -> str | None:
+    src = res / "erders.csv"
+    if not src.exists():
+        return "erders.csv absent (etape erders)"
+    from darija.topo import draw_topomap, resolve_positions
+
+    t = pd.read_csv(src)
+    conditions = [x for x in ("articulated", "imagined") if x in set(t.condition)]
+    bandes = [x for x in ("theta", "mu", "beta", "gamma bas") if x in set(t.bande)]
+    noms = {"theta": "theta 4-8 Hz", "mu": "mu 8-13 Hz", "beta": "beta 13-30 Hz",
+            "gamma bas": "low gamma 30-45 Hz"}
+    fig, axes = plt.subplots(len(conditions), len(bandes),
+                             figsize=(2.3 * len(bandes), 2.9 * len(conditions)), squeeze=False)
+    for li, cond in enumerate(conditions):
+        for ci, bande in enumerate(bandes):
+            ax = axes[li][ci]
+            g = t[(t.condition == cond) & (t.bande == bande)].reset_index(drop=True)
+            xy, garde, _ = resolve_positions(g.electrode)
+            g = g.iloc[garde].reset_index(drop=True)
+            # une echelle par carte, centree sur zero : l'ERD articulee ecraserait
+            # sinon toute la structure de l'imagine
+            demi = max(float(np.abs(g.db_moyen).max()), 1e-6)
+            surligne = list(np.flatnonzero(g.dans_cluster.astype(bool).values))
+            im = draw_topomap(ax, g.db_moyen.values, xy, cmap="RdBu_r", vmin=-demi, vmax=demi,
+                              surligne=surligne)
+            cb = fig.colorbar(im, ax=ax, orientation="horizontal", fraction=0.05, pad=0.02, aspect=18)
+            cb.ax.tick_params(labelsize=6.5)
+            if li == len(conditions) - 1:
+                cb.set_label("dB vs pre-go", fontsize=7)
+            compte = f"{len(surligne)} electrode{'' if len(surligne) == 1 else 's'} in clusters"
+            ax.set_title(f"{noms.get(bande, bande)}\n{compte}" if li == 0 else compte,
+                         fontsize=8, pad=2)
+            if ci == 0:
+                ax.annotate(cond, (-0.06, 0.5), xycoords="axes fraction", rotation=90,
+                            ha="right", va="center", fontsize=9)
+    fig.subplots_adjust(wspace=0.08, hspace=0.25)
+    fig.savefig(out / "fig13-erd-ers.pdf")
+    plt.close(fig)
+    return None
+
+
 FIGURES = (
     ("fig1-protocol-timing", fig_protocole, "protocole et timing mesure"),
     ("fig2-main-result", fig_principal, "les deux conditions sur un seul axe"),
@@ -719,6 +855,9 @@ FIGURES = (
     ("fig5-contrasts", fig_contrastes, "les cinq contrastes sur un axe commun"),
     ("fig6-rsa", fig_rsa, "matrices de dissimilarite et correlations de Mantel"),
     ("fig7-topomaps", fig_topo, "discriminabilite par electrode sur le scalp"),
+    ("fig9-robustness", fig_robustesse, "selection imbriquee et grille"),
+    ("fig12-time-resolved", fig_temporel, "decodage en fenetres glissantes"),
+    ("fig13-erd-ers", fig_erders, "ERD/ERS par bande et par condition"),
 )
 
 
