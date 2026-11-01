@@ -321,7 +321,7 @@ python scripts/run_all.py --input /path/to/xdf --work /path/to/work
 Useful options:
 
 ```bash
-python scripts/run_all.py --list                      # list the 19 steps
+python scripts/run_all.py --list                      # list the 20 steps
 python scripts/run_all.py ... --only rang grille      # run only these steps
 python scripts/run_all.py ... --skip archives         # epochs already built
 python scripts/run_all.py ... --max-hours 11          # stop cleanly before a time limit
@@ -348,14 +348,15 @@ answers, what is missing, and the exact `--only` command to recompute it.
 | 9 | `drapeaux` | `essais.csv`, `hf_55_95.npz` | Sound, blink and 55–95 Hz power of every trial |
 | 10 | `controles` | `controles_*.csv` | Does the imagined result survive without sound/blink trials, below 26 Hz, and does muscle alone decode? |
 | 11 | `transfert` | `transfert.csv`, `transfert_apparie.csv` | Does a decoder trained on articulated speech read imagined speech, and does adding articulated trials help? |
-| 12 | `grille` | `imagine_grille.csv` | Does a structured contrast emerge where the 15 words fail? |
-| 13 | `reconciliation` | `reconciliation_brut.csv`, `reconciliation_ica.csv` | Same models with and without ocular ICA |
-| 14 | `montages` | `emg_montages.csv` | Electrode subsets and supervised spatial filtering |
-| 15 | `apparies` | `paires_*.csv` | Which differences between configurations are real? |
-| 16 | `rang` | `rank_sweep.csv` | How does accuracy depend on the retained rank? |
-| 17 | `rsa` | `rsa_imagined.csv`, `rsa_articulated.csv` | Is there representational structure across word pairs? |
-| 18 | `figures` | `figures/*.pdf` | The manuscript figures |
-| 19 | `tableau` | `tableau_configurations.csv`, `chiffres_manuscrit.csv` | Every configuration evaluated, and every number of the manuscript with its source |
+| 12 | `transfert_controle` | `transfert_{sans_machoire_26hz,sans_machoire,26hz}*.csv` | Does that transfer survive without the jaw ring and occiput (46 channels, re-referenced) and below 26 Hz? |
+| 13 | `grille` | `imagine_grille.csv` | Does a structured contrast emerge where the 15 words fail? |
+| 14 | `reconciliation` | `reconciliation_brut.csv`, `reconciliation_ica.csv` | Same models with and without ocular ICA |
+| 15 | `montages` | `emg_montages.csv` | Electrode subsets and supervised spatial filtering |
+| 16 | `apparies` | `paires_*.csv` | Which differences between configurations are real? |
+| 17 | `rsa` | `rsa_imagined.csv`, `rsa_articulated.csv`, `rsa_*_moyenne.csv` | Is there representational structure across word pairs, and is the mean crossnobis dissimilarity above its permutation null? |
+| 18 | `rang` | `rank_sweep.csv` | How does accuracy depend on the retained rank? |
+| 19 | `figures` | `figures/*.pdf` | The manuscript figures |
+| 20 | `tableau` | `tableau_configurations.csv`, `chiffres_manuscrit.csv` | Every configuration evaluated, and every number of the manuscript with its source |
 
 **One archive, one execution.** Every decoding step uses the same epoch archive,
 chosen with `--archive` (default `brut`, without ocular ICA); the other archive
@@ -434,6 +435,9 @@ python scripts/14_master_table.py --results results
 #     or leave-one-session-out, and articulated trials added to imagined training,
 #     each compared with imagined -> imagined on the same test trials
 python scripts/15_transfer.py --epochs epochs.npz --out results
+#     the same without the jaw ring and occiput, and below 26 Hz (muscle control)
+python scripts/15_transfer.py --epochs epochs.npz --out results \
+    --montage sans_machoire --lowpass 26 --tag sans_machoire_26hz
 ```
 
 ### 6.1 Options of `01_build_epochs.py`

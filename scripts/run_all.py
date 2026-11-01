@@ -82,9 +82,13 @@ class Runner:
         reserve = min(0.25, 0.05 * self.max_hours)
         return max(0.0, self.max_hours - (time.time() - self.t0) / 3600 - reserve)
 
-    def run(self, script: str, *args, label: str = "", budget: bool = True) -> int:
+    def run(self, script: str, *args, label: str = "", budget: bool = True,
+            always: bool = False) -> int:
+        """``always`` : étape de quelques minutes qui lit les autres (figures,
+        tableau). Elle tourne même budget épuisé, dans la réserve : sans elle,
+        un run de onze heures finit sans figure ni tableau, ce qui est arrivé."""
         hours = self.remaining_hours()
-        if hours <= 0.1:
+        if hours <= 0.1 and not always:
             print(f"[SAUTE] {label or script} : budget épuisé", flush=True)
             self.skipped.append(label or script)
             return 1
@@ -452,7 +456,7 @@ def etape_rsa(r: Runner) -> None:
     for condition in ("imagined", "articulated"):
         r.run("03_rsa.py", "--epochs", r.archive(), "--condition", condition,
               "--out", r.results / f"rsa_{condition}.csv",
-              label=f"14. RSA — {condition}, 105 paires de mots", budget=False)
+              label=f"14. RSA — {condition}, 105 paires de mots", budget=False, always=True)
 
 
 def etape_topo(r: Runner) -> None:
@@ -536,10 +540,38 @@ def etape_transfert(r: Runner) -> None:
           label="TRANSFERT ARTICULÉ -> IMAGINÉ", budget=False)
 
 
+#: variantes du contrôle musculaire du transfert, de la plus stricte à la moins
+#: stricte : une coupure de budget perd d'abord les variantes partielles
+TRANSFERT_CONTROLES = (
+    ("sans_machoire_26hz", ["--montage", "sans_machoire", "--lowpass", 26],
+     "sans mâchoire ni occiput, sous 26 Hz"),
+    ("sans_machoire", ["--montage", "sans_machoire"], "sans mâchoire ni occiput"),
+    ("26hz", ["--lowpass", 26], "sous 26 Hz"),
+)
+
+
+def etape_transfert_controle(r: Runner) -> None:
+    """Le transfert articulé -> imaginé survit-il sans l'EMG mandibulaire ?
+
+    Le transfert est le seul résultat imaginé qui survit à Holm. Un décodeur
+    entraîné sur l'articulé apprend d'abord le muscle ; s'il lit l'imaginé, ce
+    peut être par une micro-activité musculaire résiduelle. Retirer l'anneau
+    mandibulaire et les fréquences au-dessus de 26 Hz est ce qui tranche.
+    """
+    for tag, extra, quoi in TRANSFERT_CONTROLES:
+        if all((r.results / f).exists() for f in (f"transfert_{tag}.csv",
+                                                  f"transfert_{tag}_apparie.csv")):
+            print(f"transfert_{tag} déjà présent — variante sautée")
+            continue
+        r.run("15_transfer.py", "--epochs", r.archive(), "--out", r.results,
+              "--tag", tag, *extra,
+              label=f"TRANSFERT ARTICULÉ -> IMAGINÉ — {quoi}", budget=False)
+
+
 def etape_tableau(r: Runner) -> None:
     """Un tableau de toutes les configurations et des chiffres du manuscrit."""
     r.run("14_master_table.py", "--results", r.results,
-          label="TABLEAU MAÎTRE", budget=False)
+          label="TABLEAU MAÎTRE", budget=False, always=True)
 
 
 def etape_figures(r: Runner) -> None:
@@ -551,7 +583,7 @@ def etape_figures(r: Runner) -> None:
     """
     r.run("06_figures.py", "--results", r.results,
           "--out", r.results / "figures",
-          label="15. FIGURES DU MANUSCRIT", budget=False)
+          label="15. FIGURES DU MANUSCRIT", budget=False, always=True)
 
 
 #: nom court -> (fonction, ce que l'étape décide). L'ordre est celui de la
@@ -568,12 +600,14 @@ ETAPES = (
     ("drapeaux",       etape_drapeaux,       "son, clignement, 55-95 Hz, ~40 min"),
     ("controles",      etape_controles,      "le résultat imaginé sans contamination"),
     ("transfert",      etape_transfert,      "l'articulé se transfère-t-il à l'imaginé"),
+    ("transfert_controle", etape_transfert_controle,
+     "le transfert sans mâchoire et sous 26 Hz"),
     ("grille",         etape_grille,         "contrastes structurés"),
     ("reconciliation", etape_reconciliation, "avec et sans ICA"),
     ("montages",       etape_montages,       "dix électrodes contre soixante"),
     ("apparies",       etape_apparies,       "quel écart est réel"),
-    ("rang",           etape_rang,           "l'effet à rang plein"),
     ("rsa",            etape_rsa,            "structure par paires"),
+    ("rang",           etape_rang,           "l'effet à rang plein"),
     ("figures",        etape_figures,        "les figures du manuscrit"),
     ("tableau",        etape_tableau,        "tableau maître et chiffres du manuscrit"),
 )
@@ -594,6 +628,8 @@ ATTENDUS = (
     ("imagine_grille.csv", "grille", "contrastes structurés"),
     ("rsa_imagined.csv", "rsa", "structure par paires, imaginé"),
     ("rsa_articulated.csv", "rsa", "structure par paires, articulé"),
+    ("rsa_imagined_moyenne.csv", "rsa", "les mots se distinguent-ils, imaginé"),
+    ("rsa_articulated_moyenne.csv", "rsa", "les mots se distinguent-ils, articulé"),
     ("figures/fig1-protocol-timing.pdf", "figures", "protocole et timing"),
     ("figures/fig2-main-result.pdf", "figures", "les deux conditions sur un axe"),
     ("figures/fig3-muscle-controls.pdf", "figures", "les trois contrôles musculaires"),
@@ -615,6 +651,9 @@ ATTENDUS = (
     ("imbrique_grille.csv", "imbrique", "toutes les configurations de la grille"),
     ("transfert.csv", "transfert", "l'articulé se transfère-t-il à l'imaginé"),
     ("transfert_apparie.csv", "transfert", "transfert et articulé ajouté contre imaginé seul"),
+    *[(f"transfert_{tag}{suffixe}.csv", "transfert_controle", f"{quoi}{detail}")
+      for tag, _, quoi in TRANSFERT_CONTROLES
+      for suffixe, detail in (("", ""), ("_apparie", ", contre imaginé seul"))],
     ("tableau_configurations.csv", "tableau", "chaque configuration évaluée"),
     ("chiffres_manuscrit.csv", "tableau", "chaque nombre du manuscrit et sa source"),
 )
@@ -635,6 +674,86 @@ CONNUS = frozenset(
 SEUIL_SIG, SEUIL_80, SEUIL_95 = 0.0763, 0.0813, 0.0860
 
 
+#: colonnes qui disent DE QUOI une ligne parle. Le filtre d'avant ne gardait
+#: que modèle, schéma, contraste... : les lignes de topo_electrodes, des
+#: contrôles et de la sélection imbriquée s'affichaient sans leur électrode,
+#: leur sous-ensemble ou leur procédure, donc illisibles.
+LIBELLES = ("source", "condition", "fenetre", "electrode", "modele", "procedure", "schema",
+            "contraste", "recentre", "montage", "passe_bas", "rang", "portee", "exclusion",
+            "essais_retenus", "bandes", "caracteristiques", "pretraitement", "geometrie",
+            "configuration_a", "configuration_b", "reference")
+MESURES = ("essais", "equilibree", "hasard_eq", "seuil_eq", "p_perm", "p", "p_holm",
+           "difference", "difference_points", "p_apparie", "rho_spearman", "p_mantel",
+           "dissimilarite_moyenne", "nulle_moy")
+#: tables à une ligne par essai : on n'en imprime qu'un résumé
+PAR_ESSAI = ("timing.csv", "validation_audio.csv", "essais.csv")
+LIGNES_MAX = 12
+
+
+def colonnes(table) -> list[str]:
+    libelles = ("source", "configuration") if "configuration" in table.columns else LIBELLES
+    mesures = [m for m in MESURES if not (m == "p" and "p_perm" in table.columns)]
+    keep = [c for c in (*libelles, *mesures) if c in table.columns]
+    keep = [c for c in keep if not table[c].isna().all()]
+    return keep or list(table.columns)
+
+
+def resume_table(name: str, table, question: str) -> None:
+    """Résumé lisible d'un CSV : jamais plus de quelques dizaines de lignes."""
+    import pandas as pd
+
+    print(f"\n{'=' * 90}\n{name} — {len(table)} lignes — {question}\n{'=' * 90}")
+    if name in PAR_ESSAI:
+        print(f"une ligne par essai ; colonnes : {', '.join(map(str, table.columns))}")
+        if "cond" in table.columns:
+            print("  " + ", ".join(f"{c} : {n}" for c, n in table.cond.value_counts().items()))
+        return
+    if name == "chiffres_manuscrit.csv":
+        print("nombres par section (le détail est dans le fichier) :")
+        for section, n in table.section.value_counts(sort=False).items():
+            print(f"  {section:40s} {n:4d}")
+        return
+    keep = colonnes(table)
+    with pd.option_context("display.width", 220, "display.max_colwidth", 60):
+        if "equilibree" not in table.columns:
+            # tables appariées, RSA : les plus petites p d'abord
+            pcol = next((c for c in ("p_holm", "p_apparie", "p_mantel", "p_perm", "p")
+                         if c in table.columns), None)
+            t = table.sort_values(pcol) if pcol else table
+            print(t.head(LIGNES_MAX)[keep].round(4).to_string(index=False))
+            if len(t) > LIGNES_MAX:
+                print(f"  ... {len(t) - LIGNES_MAX} autres lignes dans le fichier")
+            if "p_holm" in table.columns:
+                print(f"survivent à Holm : {int((table.p_holm < 0.05).sum())} / {len(table)}")
+            return
+        print(table.sort_values("equilibree", ascending=False).head(LIGNES_MAX)[keep]
+              .round(4).to_string(index=False))
+        if "seuil_eq" not in table.columns:
+            return
+        # une carte = une fenêtre x une condition : compter sur l'ensemble
+        # mélangeait des questions distinctes (topo_electrodes)
+        # le tableau maître se compte fichier par fichier, chacun sa famille
+        if "source" in table.columns:
+            groupes = ["source"]
+        else:
+            groupes = [c for c in ("fenetre", "condition") if c in table.columns
+                       and table[c].nunique() > 1]
+        blocs = table.groupby(groupes, dropna=False, sort=False) if groupes else [((), table)]
+        for cle, g in blocs:
+            nom = " / ".join(map(str, cle if isinstance(cle, tuple) else (cle,)))
+            above = g[g.equilibree > g.seuil_eq]
+            ligne = f"\n{nom + ' : ' if nom else ''}au-dessus du seuil de détectabilité : " \
+                    f"{len(above)} / {len(g)}"
+            if "significatif_holm" in g.columns:
+                ligne += f" ; survivent à Holm : {int(g.significatif_holm.astype(bool).sum())} / {len(g)}"
+            print(ligne)
+            if len(above) and groupes != ["source"]:   # le détail est dans les fichiers sources
+                print(above.sort_values("equilibree", ascending=False).head(LIGNES_MAX)[keep]
+                      .round(4).to_string(index=False))
+                if len(above) > LIGNES_MAX:
+                    print(f"  ... {len(above) - LIGNES_MAX} autres")
+
+
 def bilan(r: Runner) -> None:
     import pandas as pd
 
@@ -650,9 +769,6 @@ def bilan(r: Runner) -> None:
         if a.exists():
             print(f"  {a.name:40s} {a.stat().st_size / 1e9:9.2f} Go")
 
-    cols = ("modele", "schema", "contraste", "recentre", "montage", "rang",
-            "portee", "equilibree", "hasard_eq", "seuil_eq", "p_perm", "p_holm")
-
     manquants = []
     for name, etape, question in ATTENDUS:
         path = r.results / name
@@ -662,24 +778,7 @@ def bilan(r: Runner) -> None:
         if path.suffix != ".csv":          # une figure n'a pas de tableau à lire
             print(f"\n{name} — présent ({path.stat().st_size / 1e3:.0f} ko) — {question}")
             continue
-        table = pd.read_csv(path)
-        print(f"\n{'=' * 90}\n{name} — {len(table)} lignes — {question}\n{'=' * 90}")
-        if "equilibree" not in table.columns:          # tables appariées, RSA
-            print(table.to_string(index=False))
-            continue
-        keep = [c for c in cols if c in table.columns] or list(table.columns)
-        print(table.sort_values("equilibree", ascending=False).head(12)[keep]
-              .to_string(index=False))
-        if "seuil_eq" not in table.columns:
-            continue
-        above = table[table.equilibree > table.seuil_eq]
-        print(f"\nau-dessus du seuil de détectabilité : {len(above)} / {len(table)}")
-        if len(above):
-            print(above.sort_values("equilibree", ascending=False)[keep]
-                  .to_string(index=False))
-        if "significatif_holm" in table.columns:
-            holm = table[table.significatif_holm.astype(bool)]
-            print(f"survivent à Holm dans leur famille : {len(holm)} / {len(table)}")
+        resume_table(name, pd.read_csv(path), question)
 
     print(f"\n{'=' * 90}\nRÉPONSE À LA QUESTION CENTRALE\n{'=' * 90}")
     path = r.results / "imagine_mots15.csv"

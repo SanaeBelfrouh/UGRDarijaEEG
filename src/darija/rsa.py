@@ -29,8 +29,16 @@ def _shrunk_precision(residuals: np.ndarray) -> np.ndarray:
     """Inverse de la covariance du bruit, avec retrecissement diagonal."""
     from sklearn.covariance import ledoit_wolf
 
+    from scipy.linalg import LinAlgError, cho_factor, cho_solve
+
     cov, _ = ledoit_wolf(residuals)
-    return np.linalg.pinv(cov)
+    # la covariance retrecie est definie positive : Cholesky donne la meme
+    # inverse que pinv (a 1e-14 pres) quarante fois plus vite, ce qui rend
+    # possible de la re-estimer a chaque permutation
+    try:
+        return cho_solve(cho_factor(cov), np.eye(len(cov)))
+    except LinAlgError:
+        return np.linalg.pinv(cov)
 
 
 def crossnobis_rdm(X: np.ndarray, y: np.ndarray, folds: np.ndarray,
@@ -74,6 +82,96 @@ def crossnobis_rdm(X: np.ndarray, y: np.ndarray, folds: np.ndarray,
             value = float(np.mean(products)) if products else np.nan
             rdm[i, j] = rdm[j, i] = value
     return rdm, labels
+
+
+def _fold_means(X, y, folds, labels, fold_ids):
+    means = np.full((len(fold_ids), len(labels), X.shape[1]), np.nan)
+    for fi, f in enumerate(fold_ids):
+        in_fold = folds == f
+        for li, lab in enumerate(labels):
+            mask = in_fold & (y == lab)
+            if mask.any():
+                means[fi, li] = X[mask].mean(axis=0)
+    return means
+
+
+def _mean_crossnobis(means: np.ndarray, precision: np.ndarray) -> float:
+    """Moyenne des dissimilarites crossnobis hors diagonale, par produits de Gram.
+
+    Pour deux plis a != b, (m_ai - m_aj) P (m_bi - m_bj) = G_ii + G_jj - G_ij - G_ji
+    avec G = M_a P M_b^T. Une paire de mots absente d'un pli est ignoree, comme
+    dans :func:`crossnobis_rdm`.
+    """
+    n_folds, n = means.shape[:2]
+    MP = means @ precision
+    total = np.zeros((n, n))
+    count = np.zeros((n, n))
+    for a in range(n_folds):
+        for b in range(n_folds):
+            if a == b:
+                continue
+            G = means[a] @ MP[b].T
+            d = np.diag(G)
+            D = d[:, None] + d[None, :] - G - G.T
+            ok = np.isfinite(D)
+            total[ok] += D[ok]
+            count[ok] += 1
+    iu = np.triu_indices(n, k=1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        pair = total[iu] / count[iu]
+    return float(np.nanmean(pair))
+
+
+def _precision_for(X, y, folds, labels, fold_ids, means):
+    residuals = []
+    for fi, f in enumerate(fold_ids):
+        for li, lab in enumerate(labels):
+            mask = (folds == f) & (y == lab)
+            if mask.any():
+                residuals.append(X[mask] - means[fi, li])
+    return _shrunk_precision(np.concatenate(residuals))
+
+
+def mean_dissimilarity_test(X: np.ndarray, y: np.ndarray, folds: np.ndarray,
+                            labels: list[str] | None = None, n_perm: int = 200,
+                            seed: int = 0) -> tuple[float, float, float]:
+    """La dissimilarite crossnobis moyenne entre mots depasse-t-elle zero ?
+
+    L'estimateur est d'esperance nulle sous l'hypothese nulle, mais une moyenne
+    positive ne dit rien seule : il faut sa distribution sous le hasard. Les
+    etiquettes sont permutees A L'INTERIEUR de chaque pli (session), ce qui
+    garde la structure des sessions et le nombre d'essais par mot et par pli,
+    puis TOUT est recalcule, matrice de precision comprise.
+
+    Garder la precision des vraies etiquettes sous permutation serait plus
+    rapide mais faux : avec plus de dimensions que d'essais, les moyennes
+    permutees tombent en partie dans le sous-espace des residus sur lequel la
+    precision a ete estimee, et la nulle n'est plus comparable a l'observe (sur
+    du bruit pur : observe -15, nulle +0,08). Test unilateral.
+
+    Renvoie (moyenne observee, p, moyenne de la distribution nulle).
+    """
+    X = np.asarray(X, dtype=np.float64)
+    y = np.asarray(y)
+    folds = np.asarray(folds)
+    labels = labels or sorted(np.unique(y).tolist())
+    fold_ids = np.unique(folds)
+
+    def statistic(lab):
+        means = _fold_means(X, lab, folds, labels, fold_ids)
+        return _mean_crossnobis(means, _precision_for(X, lab, folds, labels, fold_ids, means))
+
+    observed = statistic(y)
+    rng = np.random.default_rng(seed)
+    idx_by_fold = [np.flatnonzero(folds == f) for f in fold_ids]
+    null = np.empty(n_perm)
+    for k in range(n_perm):
+        yp = y.copy()
+        for idx in idx_by_fold:
+            yp[idx] = y[idx][rng.permutation(len(idx))]
+        null[k] = statistic(yp)
+    p = (np.sum(null >= observed) + 1) / (n_perm + 1)
+    return observed, float(p), float(null.mean())
 
 
 def _levenshtein(a: str, b: str) -> int:
