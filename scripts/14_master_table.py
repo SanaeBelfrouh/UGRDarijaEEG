@@ -46,15 +46,19 @@ SOURCES = {
     "transfert_sans_machoire_26hz.csv": "transfert, sans machoire ni occiput, sous 26 Hz",
     "transfert_sans_machoire.csv": "transfert, sans machoire ni occiput",
     "transfert_26hz.csv": "transfert, sous 26 Hz",
+    "transfert_sans_machoire_seule.csv": "transfert, sans l'anneau mandibulaire seul",
+    "transfert_sans_occipital.csv": "transfert, sans les occipitales seules",
+    "alignement.csv": "15 mots, alignement euclidien, aucun ou recentrage riemannien",
+    "decodage_temporel.csv": "15 mots, fenetres glissantes de 250 ms",
 }
 
 #: fichiers ecrits par des etapes a validation leave-one-session-out sans
 #: colonne ``schema``
-LOSO_SANS_SCHEMA = ("controles_exclusions.csv", "controles_26hz.csv", "controles_muscle.csv",
+LOSO_SANS_SCHEMA = ("alignement.csv", "controles_exclusions.csv", "controles_26hz.csv", "controles_muscle.csv",
                     "imbrique_resultats.csv", "imbrique_grille.csv")
 
 #: ce qui distingue deux lignes d'un meme fichier
-LIBELLES = ("condition", "fenetre", "modele", "schema", "contraste", "recentre", "montage",
+LIBELLES = ("condition", "fenetre", "centre_s", "alignement", "modele", "schema", "contraste", "recentre", "montage",
             "passe_bas", "rang", "portee", "exclusion", "essais_retenus", "bandes",
             "caracteristiques", "pretraitement", "geometrie")
 
@@ -219,7 +223,9 @@ def chiffres(res: Path) -> pd.DataFrame:
     for stem, quoi in (("transfert", ""),
                        ("transfert_sans_machoire_26hz", "sans machoire ni occiput, sous 26 Hz : "),
                        ("transfert_sans_machoire", "sans machoire ni occiput : "),
-                       ("transfert_26hz", "sous 26 Hz : ")):
+                       ("transfert_26hz", "sous 26 Hz : "),
+                       ("transfert_sans_machoire_seule", "sans l'anneau mandibulaire : "),
+                       ("transfert_sans_occipital", "sans les occipitales : ")):
         tr = c.read(f"{stem}.csv")
         if tr is not None:
             for schema, block in tr.groupby("schema", sort=False):
@@ -253,6 +259,48 @@ def chiffres(res: Path) -> pd.DataFrame:
                   f"rsa_{cond}_moyenne.csv", f"nulle {float(r.nulle_moy):+.4f}")
             c.add("rsa", f"{cond} : dissimilarite moyenne, p (permutation dans les sessions)",
                   round(float(r.p_perm), 4), f"rsa_{cond}_moyenne.csv", f"{int(r.n_perm)} tirages")
+    al = c.read("alignement.csv")
+    if al is not None:
+        for _, r in al.iterrows():
+            label = f"{r.condition}, {r.modele}, alignement {r.alignement}"
+            c.add("alignement", f"{label} : exactitude equilibree", round(float(r.equilibree), 4), "alignement.csv")
+            c.add("alignement", f"{label} : p (Holm, condition)", round(float(r.p_holm), 4), "alignement.csv")
+    ap = c.read("alignement_apparie.csv")
+    if ap is not None:
+        for _, r in ap.iterrows():
+            label = f"{r.condition}, {r.modele}, euclidien moins {r.configuration_b}"
+            c.add("alignement", f"{label} : difference", round(float(r.difference), 4), "alignement_apparie.csv")
+            c.add("alignement", f"{label} : p apparie (Holm)", round(float(r.p_holm), 4), "alignement_apparie.csv")
+    dt = c.read("decodage_temporel.csv")
+    if dt is not None:
+        for (cond, rec), block in dt.groupby(["condition", "recentre"]):
+            r = block.loc[block.equilibree.idxmax()]
+            label = f"{cond}, recentre={rec}"
+            c.add("fenetres", f"{label} : pic d'exactitude equilibree", round(float(r.equilibree), 4),
+                  "decodage_temporel.csv", f"fenetre centree a {r.centre_s:+.3f} s")
+            c.add("fenetres", f"{label} : centre de la fenetre du pic (s)", round(float(r.centre_s), 3),
+                  "decodage_temporel.csv")
+    dc = c.read("decodage_temporel_clusters.csv")
+    if dc is not None and dt is not None:
+        # une serie sans aucun cluster doit compter 0, pas disparaitre
+        for (cond, rec), _ in dt.groupby(["condition", "recentre"]):
+            block = dc[(dc.condition == cond) & (dc.recentre == rec)]
+            sig = block[block.p_cluster < 0.05]
+            c.add("fenetres", f"{cond}, recentre={rec} : clusters temporels significatifs", int(len(sig)),
+                  "decodage_temporel_clusters.csv",
+                  "; ".join(f"{r.debut_s:+.2f} a {r.fin_s:+.2f} s, p = {r.p_cluster:.4f}"
+                            for r in sig.itertuples()))
+    ec = c.read("erders_clusters.csv")
+    if ec is not None:
+        e = c.read("erders.csv")
+        for (cond, bande), block in e.groupby(["condition", "bande"], sort=False):
+            sig = ec[(ec.condition == cond) & (ec.bande == bande) & (ec.p_cluster < 0.05)]
+            c.add("erders", f"{cond}, {bande} : changement moyen sur 64 electrodes (dB)",
+                  round(float(block.db_moyen.mean()), 3), "erders.csv")
+            c.add("erders", f"{cond}, {bande} : electrodes dans un cluster significatif",
+                  int(sig.electrodes_n.sum()), "erders_clusters.csv",
+                  "; ".join(f"{r.signe} {r.electrodes_n} el., {r.db_moyen:+.2f} dB, p = {r.p_cluster:.4f}"
+                            for r in sig.itertuples()))
     for name in ("paires_emg_montages.csv", "paires_reconciliation_brut.csv", "paires_reconciliation_ica.csv",
                  "paires_imagine_mots15.csv"):
         t = c.read(name)
@@ -289,9 +337,11 @@ def main() -> int:
         # que les exactitudes et les p qui portent les conclusions
         print(ch.section.value_counts(sort=False).to_string() + "\n")
         cles = ch[ch.section.isin(("articule", "imagine", "imagine, selection imbriquee",
-                                   "transfert", "rsa"))
+                                   "transfert", "rsa", "alignement", "fenetres", "erders"))
                   & ~ch.quantite.str.contains("seuil|difference|rho")
-                  & ~(ch.section.eq("transfert") & ch.quantite.str.contains("moins"))]
+                  & ~(ch.section.eq("transfert") & ch.quantite.str.contains("moins"))
+                  & ~(ch.section.eq("alignement") & ~(ch.quantite.str.startswith("imagined")
+                                                      & ch.quantite.str.contains("euclidien")))]
         with pd.option_context("display.width", 200, "display.max_colwidth", 100, "display.max_rows", 200):
             print(cles[["section", "quantite", "valeur"]].to_string(index=False))
     return 0

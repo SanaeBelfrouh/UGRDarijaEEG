@@ -1033,3 +1033,73 @@ def test_mean_dissimilarity_test_is_calibrated():
     X_eff = X + 0.5 * effect[[int(w[1:]) for w in y]]
     _, p_eff, _ = mean_dissimilarity_test(X_eff, y, ses, n_perm=40)
     assert p_eff < 0.05, f"un vrai effet n'est pas detecte (p = {p_eff:.3f})"
+
+
+def _script(name):
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / name
+    spec = importlib.util.spec_from_file_location(name.replace(".", "_"), path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_euclidean_alignment_whitens_each_session():
+    """Apres alignement euclidien, la covariance moyenne de chaque session est l'identite."""
+    ea = _script("16_euclidean_alignment.py")
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(60, 5, 150)) * np.arange(1, 6)[:, None]
+    groups = np.repeat([0, 1, 2], 20)
+    X[groups == 1] *= 3.0                                  # un decalage propre a une session
+    Y = ea.euclidean_alignment(X, groups)
+    for g in range(3):
+        Yc = Y[groups == g] - Y[groups == g].mean(axis=-1, keepdims=True)
+        R = np.einsum("nct,ndt->cd", Yc, Yc) / (Yc.shape[0] * (Yc.shape[-1] - 1))
+        assert np.allclose(R, np.eye(5), atol=1e-8)
+
+
+def test_erd_ers_estimator_is_unbiased_on_noise():
+    """Sur du bruit blanc, le changement de puissance doit etre nul en esperance.
+
+    Deux versions precedentes ne l'etaient pas : une fenetre de production plus
+    longue que la ligne de base (+1 dB en theta), puis le log d'une moyenne de
+    trois segments contre le log d'un seul (+0,9 dB, Jensen). Un biais de ce
+    genre passe pour une synchronisation.
+    """
+    from darija.preprocess import crop
+
+    m = _script("17_erd_ers.py")
+    rng = np.random.default_rng(1)
+    sf = 250.0
+    times = -0.5 + np.arange(625) / sf
+    X = rng.normal(size=(400, 3, len(times)))
+
+    def change(X):
+        windows = [crop(X, times, *w)[0] for w in (m.BASELINE, *m.PRODUCTION)]
+        n = min(w.shape[-1] for w in windows)
+        base = m.band_power(windows[0][..., :n], sf, m.BANDS)
+        return np.mean([10 * np.log10(m.band_power(w[..., :n], sf, m.BANDS) / base)
+                        for w in windows[1:]], axis=0)
+
+    D = change(X)
+    se = D.std(axis=0) / np.sqrt(len(D))
+    assert np.all(np.abs(D.mean(axis=0)) < 4 * se + 0.02), D.mean(axis=0)
+    X[:, :, times >= 0.4] *= 0.8                          # vraie ERD : 20 log10(0,8) = -1,94 dB
+    assert np.allclose(change(X).mean(axis=(0, 2)), -1.94, atol=0.3)
+
+
+def test_temporal_cluster_test_finds_a_planted_effect():
+    """Le test par clusters temporels retrouve un effet place dans cinq fenetres."""
+    m = _script("18_time_resolved.py")
+    rng = np.random.default_rng(0)
+    n = 600
+    y = np.array([f"w{i % 15}" for i in range(n)])
+    groups = np.repeat(np.arange(6), 100)
+    preds = np.array([rng.permutation(y) for _ in range(30)])
+    for w in range(10, 15):
+        hit = rng.random(n) < 0.12
+        preds[w, hit] = y[hit]
+    _, _, _, found = m.temporal_cluster_test(y, preds, groups, n_perm=200)
+    sig = [(s, e) for s, e, _, p in found if p < 0.05]
+    assert len(sig) == 1 and sig[0][0] <= 10 and sig[0][1] >= 14, found

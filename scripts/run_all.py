@@ -547,6 +547,9 @@ TRANSFERT_CONTROLES = (
      "sans mâchoire ni occiput, sous 26 Hz"),
     ("sans_machoire", ["--montage", "sans_machoire"], "sans mâchoire ni occiput"),
     ("26hz", ["--lowpass", 26], "sous 26 Hz"),
+    # sans_machoire retire mâchoire ET occiput : ces deux-là disent lequel compte
+    ("sans_machoire_seule", ["--montage", "sans_machoire_seule"], "sans l'anneau mandibulaire seul"),
+    ("sans_occipital", ["--montage", "sans_occipital"], "sans les occipitales seules"),
 )
 
 
@@ -566,6 +569,37 @@ def etape_transfert_controle(r: Runner) -> None:
         r.run("15_transfer.py", "--epochs", r.archive(), "--out", r.results,
               "--tag", tag, *extra,
               label=f"TRANSFERT ARTICULÉ -> IMAGINÉ — {quoi}", budget=False)
+
+
+def etape_alignement(r: Runner) -> None:
+    """L'alignement euclidien entre sessions (He et Wu 2019) change-t-il le décodage ?"""
+    if all((r.results / f).exists() for f in ("alignement.csv", "alignement_apparie.csv")):
+        print("alignement déjà présent — étape sautée")
+        return
+    r.run("16_euclidean_alignment.py", "--epochs", r.archive(), "--out", r.results,
+          label="ALIGNEMENT EUCLIDIEN ENTRE SESSIONS", budget=False)
+
+
+def etape_fenetres(r: Runner) -> None:
+    """Une fenêtre de 2 s dilue-t-elle un événement bref ? Fenêtres glissantes de 250 ms."""
+    if all((r.results / f).exists() for f in ("decodage_temporel.csv",
+                                              "decodage_temporel_clusters.csv")):
+        print("décodage résolu dans le temps déjà présent — étape sautée")
+        return
+    r.run("18_time_resolved.py", "--epochs", r.archive(), "--out", r.results,
+          label="DÉCODAGE RÉSOLU DANS LE TEMPS (250 ms, pas de 50 ms)", budget=False)
+
+
+def etape_erders(r: Runner) -> None:
+    """ERD/ERS par bande, par rapport à l'avant-go, articulé et imaginé."""
+    if all((r.results / f).exists() for f in ("erders.csv", "erders_clusters.csv")):
+        print("ERD/ERS déjà présents — étape sautée")
+        return
+    if not (r.results / "essais.csv").exists():
+        print("[SAUTE] erders : essais.csv absent, lancer l'étape drapeaux")
+        return
+    r.run("17_erd_ers.py", "--epochs", r.archive(), "--flags", r.results / "essais.csv",
+          "--out", r.results, label="ERD/ERS — theta, mu, bêta, gamma bas", budget=False)
 
 
 def etape_tableau(r: Runner) -> None:
@@ -602,6 +636,9 @@ ETAPES = (
     ("transfert",      etape_transfert,      "l'articulé se transfère-t-il à l'imaginé"),
     ("transfert_controle", etape_transfert_controle,
      "le transfert sans mâchoire et sous 26 Hz"),
+    ("alignement",     etape_alignement,     "alignement euclidien entre sessions"),
+    ("fenetres",       etape_fenetres,       "décodage en fenêtres de 250 ms"),
+    ("erders",         etape_erders,         "ERD/ERS par bande et condition"),
     ("grille",         etape_grille,         "contrastes structurés"),
     ("reconciliation", etape_reconciliation, "avec et sans ICA"),
     ("montages",       etape_montages,       "dix électrodes contre soixante"),
@@ -638,6 +675,9 @@ ATTENDUS = (
     ("figures/fig6-rsa.pdf", "figures", "dissimilarité et corrélations de Mantel"),
     ("topo_electrodes.csv", "topo", "discriminabilité électrode par électrode"),
     ("figures/fig7-topomaps.pdf", "figures", "où est le signal sur le scalp"),
+    ("figures/fig9-robustness.pdf", "figures", "sélection imbriquée et grille"),
+    ("figures/fig12-time-resolved.pdf", "figures", "décodage en fenêtres glissantes"),
+    ("figures/fig13-erd-ers.pdf", "figures", "ERD/ERS par bande"),
     ("validation_sessions.csv", "validation", "validation technique par session"),
     ("validation_audio.csv", "validation", "niveau audio de chaque essai"),
     ("essais.csv", "drapeaux", "son et clignement de chaque essai"),
@@ -654,6 +694,12 @@ ATTENDUS = (
     *[(f"transfert_{tag}{suffixe}.csv", "transfert_controle", f"{quoi}{detail}")
       for tag, _, quoi in TRANSFERT_CONTROLES
       for suffixe, detail in (("", ""), ("_apparie", ", contre imaginé seul"))],
+    ("alignement.csv", "alignement", "l'alignement euclidien change-t-il le décodage"),
+    ("alignement_apparie.csv", "alignement", "alignement euclidien contre aucun et contre riemannien"),
+    ("decodage_temporel.csv", "fenetres", "exactitude fenêtre par fenêtre"),
+    ("decodage_temporel_clusters.csv", "fenetres", "clusters temporels significatifs"),
+    ("erders.csv", "erders", "ERD/ERS électrode par électrode"),
+    ("erders_clusters.csv", "erders", "clusters spatiaux d'ERD/ERS"),
     ("tableau_configurations.csv", "tableau", "chaque configuration évaluée"),
     ("chiffres_manuscrit.csv", "tableau", "chaque nombre du manuscrit et sa source"),
 )
@@ -681,10 +727,12 @@ SEUIL_SIG, SEUIL_80, SEUIL_95 = 0.0763, 0.0813, 0.0860
 LIBELLES = ("source", "condition", "fenetre", "electrode", "modele", "procedure", "schema",
             "contraste", "recentre", "montage", "passe_bas", "rang", "portee", "exclusion",
             "essais_retenus", "bandes", "caracteristiques", "pretraitement", "geometrie",
-            "configuration_a", "configuration_b", "reference", "session", "groupe")
+            "configuration_a", "configuration_b", "reference", "session", "groupe",
+            "alignement", "bande", "signe", "electrodes_n", "debut_s", "fin_s", "centre_s")
 MESURES = ("essais", "equilibree", "hasard_eq", "seuil_eq", "p_perm", "p", "p_holm",
            "difference", "difference_points", "p_apparie", "rho_spearman", "p_mantel",
-           "dissimilarite_moyenne", "nulle_moy", "hausse_db")
+           "dissimilarite_moyenne", "nulle_moy", "hausse_db", "db_moyen", "t",
+           "p_cluster", "pic", "pic_centre_s")
 #: tables à une ligne par essai : on n'en imprime qu'un résumé
 PAR_ESSAI = ("timing.csv", "validation_audio.csv", "essais.csv")
 LIGNES_MAX = 12
@@ -717,7 +765,7 @@ def resume_table(name: str, table, question: str) -> None:
     with pd.option_context("display.width", 220, "display.max_colwidth", 60):
         if "equilibree" not in table.columns:
             # tables appariées, RSA : les plus petites p d'abord
-            pcol = next((c for c in ("p_holm", "p_apparie", "p_mantel", "p_perm", "p")
+            pcol = next((c for c in ("p_holm", "p_apparie", "p_mantel", "p_cluster", "p_perm", "p")
                          if c in table.columns), None)
             t = table.sort_values(pcol) if pcol else table
             print(t.head(LIGNES_MAX)[keep].round(4).to_string(index=False))

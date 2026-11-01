@@ -256,12 +256,17 @@ UGRDarijaEEG/
 │   ├── 03_rsa.py             representational similarity analysis of the 15 words
 │   ├── 04_rank_sweep.py      accuracy as a function of the retained rank
 │   ├── 05_paired_compare.py  paired permutation tests between configurations
-│   ├── 06_figures.py         the 7 manuscript figures, from the result CSVs
+│   ├── 06_figures.py         the 10 manuscript figures, from the result CSVs
 │   ├── 07_topomaps.py        per-electrode decoding for scalp maps
 │   ├── 08_technical_validation.py  signal quality, cue-evoked response, audio (raw XDF)
-│   └── 09_audio_review.py    WAV clips + acoustic features of imagined trials with sound
+│   ├── 09_audio_review.py    WAV clips + acoustic features of imagined trials with sound
+│   ├── 10_high_frequency.py … 15_transfer.py   high-frequency, trial flags, controls,
+│   │                         nested selection, master table, transfer between conditions
+│   ├── 16_euclidean_alignment.py  Euclidean alignment between sessions
+│   ├── 17_erd_ers.py         ERD/ERS maps by band, spatial cluster permutation
+│   └── 18_time_resolved.py   decoding in 250 ms sliding windows, temporal clusters
 ├── tests/
-│   ├── test_pipeline.py      38 unit / integration tests (incl. positive & negative controls)
+│   ├── test_pipeline.py      42 unit / integration tests (incl. positive & negative controls)
 │   ├── test_notebook.py      replays every run_all.py command on synthetic data
 │   ├── test_validation.py    technical-validation checks on synthetic XDF streams
 │   └── synthetic.py          synthetic EEG generator used by the tests
@@ -321,7 +326,7 @@ python scripts/run_all.py --input /path/to/xdf --work /path/to/work
 Useful options:
 
 ```bash
-python scripts/run_all.py --list                      # list the 20 steps
+python scripts/run_all.py --list                      # list the 23 steps
 python scripts/run_all.py ... --only rang grille      # run only these steps
 python scripts/run_all.py ... --skip archives         # epochs already built
 python scripts/run_all.py ... --max-hours 11          # stop cleanly before a time limit
@@ -348,15 +353,18 @@ answers, what is missing, and the exact `--only` command to recompute it.
 | 9 | `drapeaux` | `essais.csv`, `hf_55_95.npz` | Sound, blink and 55–95 Hz power of every trial |
 | 10 | `controles` | `controles_*.csv` | Does the imagined result survive without sound/blink trials, below 26 Hz, and does muscle alone decode? |
 | 11 | `transfert` | `transfert.csv`, `transfert_apparie.csv` | Does a decoder trained on articulated speech read imagined speech, and does adding articulated trials help? |
-| 12 | `transfert_controle` | `transfert_{sans_machoire_26hz,sans_machoire,26hz}*.csv` | Does that transfer survive without the jaw ring and occiput (46 channels, re-referenced) and below 26 Hz? |
-| 13 | `grille` | `imagine_grille.csv` | Does a structured contrast emerge where the 15 words fail? |
-| 14 | `reconciliation` | `reconciliation_brut.csv`, `reconciliation_ica.csv` | Same models with and without ocular ICA |
-| 15 | `montages` | `emg_montages.csv` | Electrode subsets and supervised spatial filtering |
-| 16 | `apparies` | `paires_*.csv` | Which differences between configurations are real? |
-| 17 | `rsa` | `rsa_imagined.csv`, `rsa_articulated.csv`, `rsa_*_moyenne.csv` | Is there representational structure across word pairs, and is the mean crossnobis dissimilarity above its permutation null? |
-| 18 | `rang` | `rank_sweep.csv` | How does accuracy depend on the retained rank? |
-| 19 | `figures` | `figures/*.pdf` | The manuscript figures |
-| 20 | `tableau` | `tableau_configurations.csv`, `chiffres_manuscrit.csv` | Every configuration evaluated, and every number of the manuscript with its source |
+| 12 | `transfert_controle` | `transfert_{sans_machoire_26hz,sans_machoire,26hz,sans_machoire_seule,sans_occipital}*.csv` | Does that transfer survive without the jaw ring and occiput (46 channels, re-referenced), below 26 Hz, and without the jaw ring alone or the occiput alone? |
+| 13 | `alignement` | `alignement.csv`, `alignement_apparie.csv` | Does Euclidean alignment between sessions (He and Wu 2019) change decoding, against no compensation and Riemannian recentring? |
+| 14 | `fenetres` | `decodage_temporel*.csv` | Does a 2 s window dilute a brief event? 250 ms windows in 50 ms steps, temporal cluster permutation |
+| 15 | `erders` | `erders.csv`, `erders_clusters.csv` | Theta, mu, beta and low-gamma power change from the pre-go interval, articulated and imagined, spatial cluster permutation |
+| 16 | `grille` | `imagine_grille.csv` | Does a structured contrast emerge where the 15 words fail? |
+| 17 | `reconciliation` | `reconciliation_brut.csv`, `reconciliation_ica.csv` | Same models with and without ocular ICA |
+| 18 | `montages` | `emg_montages.csv` | Electrode subsets and supervised spatial filtering |
+| 19 | `apparies` | `paires_*.csv` | Which differences between configurations are real? |
+| 20 | `rsa` | `rsa_imagined.csv`, `rsa_articulated.csv`, `rsa_*_moyenne.csv` | Is there representational structure across word pairs, and is the mean crossnobis dissimilarity above its permutation null? |
+| 21 | `rang` | `rank_sweep.csv` | How does accuracy depend on the retained rank? |
+| 22 | `figures` | `figures/*.pdf` | The manuscript figures |
+| 23 | `tableau` | `tableau_configurations.csv`, `chiffres_manuscrit.csv` | Every configuration evaluated, and every number of the manuscript with its source |
 
 **One archive, one execution.** Every decoding step uses the same epoch archive,
 chosen with `--archive` (default `brut`, without ocular ICA); the other archive
@@ -438,6 +446,13 @@ python scripts/15_transfer.py --epochs epochs.npz --out results
 #     the same without the jaw ring and occiput, and below 26 Hz (muscle control)
 python scripts/15_transfer.py --epochs epochs.npz --out results \
     --montage sans_machoire --lowpass 26 --tag sans_machoire_26hz
+# 16. Euclidean alignment between sessions, against none and Riemannian recentring
+python scripts/16_euclidean_alignment.py --epochs epochs.npz --out results
+# 17. ERD/ERS: theta, mu, beta, low gamma, 0.4-1.9 s against the 500 ms before the go,
+#     blink-free trials, spatial cluster permutation
+python scripts/17_erd_ers.py --epochs epochs.npz --flags results/essais.csv --out results
+# 18. Time-resolved decoding, 250 ms windows in 50 ms steps, temporal cluster permutation
+python scripts/18_time_resolved.py --epochs epochs.npz --out results
 ```
 
 ### 6.1 Options of `01_build_epochs.py`
@@ -801,7 +816,7 @@ By construction, the following cannot leak:
 ## 12. Tests
 
 ```bash
-python tests/test_pipeline.py          # 38 tests, a few minutes
+python tests/test_pipeline.py          # 42 tests, a few minutes
 python tests/test_validation.py        # 8 tests of the technical validation and audio review
 python tests/test_high_frequency.py    # broadband analysis end to end, and its guard on 45 Hz archives
 python tests/test_notebook.py          # replays every run_all.py command on synthetic data (~8 min)
