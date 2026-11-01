@@ -43,7 +43,52 @@ SOURCES = {
     "controles_26hz.csv": "imagine, sous 26 Hz",
     "controles_muscle.csv": "puissance 55-95 Hz seule",
     "transfert.csv": "transfert entre conditions, 15 mots",
+    "transfert_sans_machoire_26hz.csv": "transfert, sans machoire ni occiput, sous 26 Hz",
+    "transfert_sans_machoire.csv": "transfert, sans machoire ni occiput",
+    "transfert_26hz.csv": "transfert, sous 26 Hz",
 }
+
+#: fichiers ecrits par des etapes a validation leave-one-session-out sans
+#: colonne ``schema``
+LOSO_SANS_SCHEMA = ("controles_exclusions.csv", "controles_26hz.csv", "controles_muscle.csv",
+                    "imbrique_resultats.csv", "imbrique_grille.csv")
+
+#: ce qui distingue deux lignes d'un meme fichier
+LIBELLES = ("condition", "fenetre", "modele", "schema", "contraste", "recentre", "montage",
+            "passe_bas", "rang", "portee", "exclusion", "essais_retenus", "bandes",
+            "caracteristiques", "pretraitement", "geometrie")
+
+
+def nommer(t: pd.DataFrame) -> pd.DataFrame:
+    """Donne un modele, un schema et un libelle a chaque ligne.
+
+    Les controles et la selection imbriquee n'ecrivent pas de colonne
+    ``modele`` ou ``schema`` : leurs lignes sortaient du tableau avec NaN, donc
+    sans dire ce qu'elles evaluent.
+    """
+    t = t.copy()
+    for col in ("modele", "schema", "p_perm"):
+        if col not in t:
+            t[col] = np.nan
+    t["modele"] = t["modele"].astype(object)
+    t["schema"] = t["schema"].astype(object)
+    if "procedure" in t:
+        m = t.modele.isna() & t.procedure.notna()
+        t.loc[m, "modele"] = t.loc[m, "procedure"]
+    if "caracteristiques" in t:
+        m = t.modele.isna() & t.caracteristiques.notna()
+        t.loc[m, "modele"] = "lda, puissance 55-95 Hz : " + t.loc[m, "caracteristiques"].astype(str)
+    m = t.modele.isna() & (t.source == "imbrique_grille.csv")
+    t.loc[m, "modele"] = "grille imbriquee, lda sur vecteurs tangents"
+    m = t.schema.isna() & t.source.isin(LOSO_SANS_SCHEMA)
+    t.loc[m, "schema"] = "loso"
+    if "p" in t:                                   # les controles nomment p ce qui est p_perm
+        m = t.p_perm.isna() & t.p.notna()
+        t.loc[m, "p_perm"] = t.loc[m, "p"]
+    libelle = [c for c in LIBELLES if c in t]
+    t.insert(2, "configuration", t[libelle].apply(
+        lambda r: " | ".join(f"{k}={v}" for k, v in r.items() if pd.notna(v)), axis=1))
+    return t
 
 
 def configurations(res: Path) -> pd.DataFrame:
@@ -56,7 +101,7 @@ def configurations(res: Path) -> pd.DataFrame:
         t.insert(0, "description", what)
         t.insert(0, "source", name)
         tables.append(t)
-    return pd.concat(tables, ignore_index=True, sort=False) if tables else pd.DataFrame()
+    return nommer(pd.concat(tables, ignore_index=True, sort=False)) if tables else pd.DataFrame()
 
 
 class Chiffres:
@@ -171,23 +216,43 @@ def chiffres(res: Path) -> pd.DataFrame:
                   "controles_hf_hausse.csv")
             c.add("controles", f"hausse 55-95 Hz, {cond}, {groupe}, sessions significatives apres Holm",
                   int((block.p_holm < 0.05).sum()), "controles_hf_hausse.csv", f"sur {len(block)}")
-    tr = c.read("transfert.csv")
-    if tr is not None:
-        for schema, block in tr.groupby("schema", sort=False):
-            r = block.loc[block.equilibree.idxmax()]
-            detail = f"modele={r.modele} recentre={r.recentre}"
-            c.add("transfert", f"{schema} : meilleure exactitude equilibree", round(float(r.equilibree), 4),
-                  "transfert.csv", detail)
-            c.add("transfert", f"{schema} : p (Holm, famille du fichier)", round(float(r.p_holm), 4),
-                  "transfert.csv", detail)
-            c.add("transfert", f"{schema} : seuil de detectabilite 80 %", round(float(r.seuil_eq), 4),
-                  "transfert.csv", detail)
-    ta = c.read("transfert_apparie.csv")
-    if ta is not None:
-        for _, r in ta.iterrows():
-            label = f"{r.schema} moins {r.reference}, {r.modele}, recentre={r.recentre}"
-            c.add("transfert", f"{label} : difference", round(float(r.difference), 4), "transfert_apparie.csv")
-            c.add("transfert", f"{label} : p apparie (Holm)", round(float(r.p_holm), 4), "transfert_apparie.csv")
+    for stem, quoi in (("transfert", ""),
+                       ("transfert_sans_machoire_26hz", "sans machoire ni occiput, sous 26 Hz : "),
+                       ("transfert_sans_machoire", "sans machoire ni occiput : "),
+                       ("transfert_26hz", "sous 26 Hz : ")):
+        tr = c.read(f"{stem}.csv")
+        if tr is not None:
+            for schema, block in tr.groupby("schema", sort=False):
+                r = block.loc[block.equilibree.idxmax()]
+                detail = f"modele={r.modele} recentre={r.recentre}"
+                c.add("transfert", f"{quoi}{schema} : meilleure exactitude equilibree",
+                      round(float(r.equilibree), 4), f"{stem}.csv", detail)
+                c.add("transfert", f"{quoi}{schema} : p (Holm, famille du fichier)",
+                      round(float(r.p_holm), 4), f"{stem}.csv", detail)
+                c.add("transfert", f"{quoi}{schema} : seuil de detectabilite 80 %",
+                      round(float(r.seuil_eq), 4), f"{stem}.csv", detail)
+        ta = c.read(f"{stem}_apparie.csv")
+        if ta is not None:
+            for _, r in ta.iterrows():
+                label = f"{quoi}{r.schema} moins {r.reference}, {r.modele}, recentre={r.recentre}"
+                c.add("transfert", f"{label} : difference", round(float(r.difference), 4),
+                      f"{stem}_apparie.csv")
+                c.add("transfert", f"{label} : p apparie (Holm)", round(float(r.p_holm), 4),
+                      f"{stem}_apparie.csv")
+    for cond in ("imagined", "articulated"):
+        t = c.read(f"rsa_{cond}.csv")
+        if t is not None:
+            for _, r in t.iterrows():
+                c.add("rsa", f"{cond}, {r.modele} : rho de Spearman", float(r.rho_spearman), f"rsa_{cond}.csv")
+                c.add("rsa", f"{cond}, {r.modele} : p (Mantel)", float(r.p_mantel), f"rsa_{cond}.csv")
+                c.add("rsa", f"{cond}, {r.modele} : p (Holm)", round(float(r.p_holm), 4), f"rsa_{cond}.csv")
+        t = c.read(f"rsa_{cond}_moyenne.csv")
+        if t is not None and len(t):
+            r = t.iloc[0]
+            c.add("rsa", f"{cond} : dissimilarite crossnobis moyenne", round(float(r.dissimilarite_moyenne), 4),
+                  f"rsa_{cond}_moyenne.csv", f"nulle {float(r.nulle_moy):+.4f}")
+            c.add("rsa", f"{cond} : dissimilarite moyenne, p (permutation dans les sessions)",
+                  round(float(r.p_perm), 4), f"rsa_{cond}_moyenne.csv", f"{int(r.n_perm)} tirages")
     for name in ("paires_emg_montages.csv", "paires_reconciliation_brut.csv", "paires_reconciliation_ica.csv",
                  "paires_imagine_mots15.csv"):
         t = c.read(name)
@@ -220,8 +285,15 @@ def main() -> int:
     ch.to_csv(res / "chiffres_manuscrit.csv", index=False)
     print(f"chiffres_manuscrit.csv : {len(ch)} nombres\n")
     if len(ch):
-        with pd.option_context("display.width", 200, "display.max_colwidth", 90, "display.max_rows", 500):
-            print(ch[["section", "quantite", "valeur"]].to_string(index=False))
+        # les 600 et quelques nombres sont dans le fichier ; le journal ne montre
+        # que les exactitudes et les p qui portent les conclusions
+        print(ch.section.value_counts(sort=False).to_string() + "\n")
+        cles = ch[ch.section.isin(("articule", "imagine", "imagine, selection imbriquee",
+                                   "transfert", "rsa"))
+                  & ~ch.quantite.str.contains("seuil|difference|rho")
+                  & ~(ch.section.eq("transfert") & ch.quantite.str.contains("moins"))]
+        with pd.option_context("display.width", 200, "display.max_colwidth", 100, "display.max_rows", 200):
+            print(cles[["section", "quantite", "valeur"]].to_string(index=False))
     return 0
 
 

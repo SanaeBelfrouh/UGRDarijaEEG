@@ -1008,3 +1008,28 @@ if __name__ == "__main__":
             print(f"  FAIL  {name}: {exc}")
     print("\nechecs :", failures)
     raise SystemExit(1 if failures else 0)
+
+
+def test_mean_dissimilarity_test_is_calibrated():
+    """Le test de la dissimilarite moyenne : meme statistique que la RDM, nulle juste.
+
+    Une premiere version gardait la precision des vraies etiquettes sous
+    permutation : avec plus de dimensions que d'essais, du bruit pur sortait a
+    -15 contre une nulle a 0. La precision est maintenant re-estimee a chaque
+    tirage, et ce test verifie les trois proprietes qui comptent.
+    """
+    from darija.rsa import crossnobis_rdm, mean_dissimilarity_test
+
+    rng = np.random.default_rng(3)
+    n, F = 240, 60
+    y = np.array([f"w{i % 15}" for i in range(n)])
+    ses = np.repeat(np.arange(4), n // 4)
+    X = rng.normal(size=(n, F))
+    rdm, _ = crossnobis_rdm(X, y, ses)
+    observed, p, _ = mean_dissimilarity_test(X, y, ses, n_perm=40)
+    assert np.isclose(observed, rdm[np.tril_indices(15, k=-1)].mean())
+    assert p > 0.05, f"bruit pur juge significatif (p = {p:.3f})"
+    effect = rng.normal(size=(15, F))
+    X_eff = X + 0.5 * effect[[int(w[1:]) for w in y]]
+    _, p_eff, _ = mean_dissimilarity_test(X_eff, y, ses, n_perm=40)
+    assert p_eff < 0.05, f"un vrai effet n'est pas detecte (p = {p_eff:.3f})"

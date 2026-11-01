@@ -30,7 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from darija import WORDS                                          # noqa: E402
 from darija.preprocess import crop                                # noqa: E402
 from darija.riemann import covariances, geometric_mean, tangent_vectors  # noqa: E402
-from darija.rsa import crossnobis_rdm, mantel_test, model_rdm     # noqa: E402
+from darija.rsa import (crossnobis_rdm, mantel_test, mean_dissimilarity_test,  # noqa: E402
+                        model_rdm)
 from darija.stats import holm_bonferroni                          # noqa: E402
 
 warnings.filterwarnings("ignore")
@@ -53,6 +54,8 @@ def main() -> int:
     parser.add_argument("--tmin", type=float, default=0.0)
     parser.add_argument("--tmax", type=float, default=2.0)
     parser.add_argument("--n-perm", type=int, default=10000)
+    parser.add_argument("--n-perm-mean", type=int, default=200,
+                        help="permutations du test de la dissimilarite moyenne")
     parser.add_argument("--out", default="results/rsa.csv")
     args = parser.parse_args()
 
@@ -97,8 +100,17 @@ def main() -> int:
     off_diagonal = rdm[np.tril_indices(len(labels), k=-1)]
     print(f"\nDissimilarite moyenne entre mots : {off_diagonal.mean():+.6f}")
     print("Sous l'hypothese nulle cette moyenne vaut zero : l'estimateur crossnobis")
-    print("est non biaise. Une valeur nettement positive indique que les mots se")
-    print("distinguent, meme si aucun classifieur ne parvient a les nommer.")
+    print("est non biaise. Une valeur positive ne se lit qu'avec sa distribution nulle :")
+    print(f"etiquettes permutees dans chaque session ({args.n_perm_mean} tirages)...", flush=True)
+    observed, p_mean, null_mean = mean_dissimilarity_test(
+        patterns, y, session, labels=list(WORDS), n_perm=args.n_perm_mean, seed=0)
+    print(f"  moyenne {observed:+.6f}, nulle {null_mean:+.6f}, p = {p_mean:.4f} (unilateral)")
+    if not np.isclose(observed, off_diagonal.mean(), rtol=1e-6, atol=1e-6):
+        raise SystemExit("le test de la moyenne ne reproduit pas la RDM : calcul a verifier")
+    pd.DataFrame([dict(condition=args.condition, essais=len(y),
+                       dissimilarite_moyenne=observed, nulle_moy=null_mean,
+                       p_perm=p_mean, n_perm=args.n_perm_mean)]).to_csv(
+        Path(args.out).with_name(Path(args.out).stem + "_moyenne.csv"), index=False)
     print(f"\nresultats -> {args.out}")
     return 0
 
