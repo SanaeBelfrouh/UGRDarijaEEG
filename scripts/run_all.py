@@ -732,7 +732,8 @@ LIBELLES = ("source", "condition", "fenetre", "electrode", "modele", "procedure"
 MESURES = ("essais", "equilibree", "hasard_eq", "seuil_eq", "p_perm", "p", "p_holm",
            "difference", "difference_points", "p_apparie", "rho_spearman", "p_mantel",
            "dissimilarite_moyenne", "nulle_moy", "hausse_db", "db_moyen", "t",
-           "p_cluster", "pic", "pic_centre_s")
+           "p_cluster", "pic", "pic_centre_s", "retires", "aleatoire_moyenne",
+           "aleatoire_min", "aleatoire_max")
 #: tables à une ligne par essai : on n'en imprime qu'un résumé
 PAR_ESSAI = ("timing.csv", "validation_audio.csv", "essais.csv")
 LIGNES_MAX = 12
@@ -743,7 +744,11 @@ def colonnes(table) -> list[str]:
     mesures = [m for m in MESURES if not (m == "p" and "p_perm" in table.columns)]
     keep = [c for c in (*libelles, *mesures) if c in table.columns]
     keep = [c for c in keep if not table[c].isna().all()]
-    return keep or list(table.columns)
+    # sans aucune mesure connue (validation_sessions), les libelles seuls ne
+    # disent rien : on montre tout
+    if not any(c in mesures for c in keep):
+        return list(table.columns)
+    return keep
 
 
 def resume_table(name: str, table, question: str) -> None:
