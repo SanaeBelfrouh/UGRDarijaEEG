@@ -50,11 +50,12 @@ SOURCES = {
     "transfert_sans_occipital.csv": "transfert, sans les occipitales seules",
     "alignement.csv": "15 mots, alignement euclidien, aucun ou recentrage riemannien",
     "decodage_temporel.csv": "15 mots, fenetres glissantes de 250 ms",
+    "reseaux.csv": "15 mots, EEGNet et ShallowConvNet",
 }
 
 #: fichiers ecrits par des etapes a validation leave-one-session-out sans
 #: colonne ``schema``
-LOSO_SANS_SCHEMA = ("alignement.csv", "controles_exclusions.csv", "controles_26hz.csv", "controles_muscle.csv",
+LOSO_SANS_SCHEMA = ("alignement.csv", "reseaux.csv", "controles_exclusions.csv", "controles_26hz.csv", "controles_muscle.csv",
                     "imbrique_resultats.csv", "imbrique_grille.csv")
 
 #: ce qui distingue deux lignes d'un meme fichier
@@ -301,6 +302,19 @@ def chiffres(res: Path) -> pd.DataFrame:
                   int(sig.electrodes_n.sum()), "erders_clusters.csv",
                   "; ".join(f"{r.signe} {r.electrodes_n} el., {r.db_moyen:+.2f} dB, p = {r.p_cluster:.4f}"
                             for r in sig.itertuples()))
+    rn = c.read("reseaux.csv")
+    if rn is not None:
+        for _, r in rn.iterrows():
+            label = f"{r.condition}, {r.modele}"
+            c.add("reseaux", f"{label} : exactitude equilibree", round(float(r.equilibree), 4), "reseaux.csv")
+            c.add("reseaux", f"{label} : p (permutation)", round(float(r.p_perm), 4), "reseaux.csv")
+            c.add("reseaux", f"{label} : p (Holm, condition)", round(float(r.p_holm), 4), "reseaux.csv")
+    ra = c.read("reseaux_apparie.csv")
+    if ra is not None:
+        for _, r in ra.iterrows():
+            label = f"{r.condition}, {r.configuration_a} moins {r.configuration_b}"
+            c.add("reseaux", f"{label} : difference", round(float(r.difference), 4), "reseaux_apparie.csv")
+            c.add("reseaux", f"{label} : p apparie (Holm)", round(float(r.p_holm), 4), "reseaux_apparie.csv")
     for name in ("paires_emg_montages.csv", "paires_reconciliation_brut.csv", "paires_reconciliation_ica.csv",
                  "paires_imagine_mots15.csv"):
         t = c.read(name)
@@ -337,7 +351,7 @@ def main() -> int:
         # que les exactitudes et les p qui portent les conclusions
         print(ch.section.value_counts(sort=False).to_string() + "\n")
         cles = ch[ch.section.isin(("articule", "imagine", "imagine, selection imbriquee",
-                                   "transfert", "rsa", "alignement", "fenetres", "erders"))
+                                   "transfert", "rsa", "alignement", "fenetres", "erders", "reseaux"))
                   & ~ch.quantite.str.contains("seuil|difference|rho")
                   & ~(ch.section.eq("transfert") & ch.quantite.str.contains("moins"))
                   & ~(ch.section.eq("alignement") & ~(ch.quantite.str.startswith("imagined")

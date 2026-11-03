@@ -264,9 +264,10 @@ UGRDarijaEEG/
 │   │                         nested selection, master table, transfer between conditions
 │   ├── 16_euclidean_alignment.py  Euclidean alignment between sessions
 │   ├── 17_erd_ers.py         ERD/ERS maps by band, spatial cluster permutation
-│   └── 18_time_resolved.py   decoding in 250 ms sliding windows, temporal clusters
+│   ├── 18_time_resolved.py   decoding in 250 ms sliding windows, temporal clusters
+│   └── 19_deep_networks.py   EEGNet and ShallowConvNet (PyTorch), cropped training
 ├── tests/
-│   ├── test_pipeline.py      42 unit / integration tests (incl. positive & negative controls)
+│   ├── test_pipeline.py      43 unit / integration tests (incl. positive & negative controls)
 │   ├── test_notebook.py      replays every run_all.py command on synthetic data
 │   ├── test_validation.py    technical-validation checks on synthetic XDF streams
 │   └── synthetic.py          synthetic EEG generator used by the tests
@@ -326,7 +327,7 @@ python scripts/run_all.py --input /path/to/xdf --work /path/to/work
 Useful options:
 
 ```bash
-python scripts/run_all.py --list                      # list the 23 steps
+python scripts/run_all.py --list                      # list the 24 steps
 python scripts/run_all.py ... --only rang grille      # run only these steps
 python scripts/run_all.py ... --skip archives         # epochs already built
 python scripts/run_all.py ... --max-hours 11          # stop cleanly before a time limit
@@ -357,14 +358,15 @@ answers, what is missing, and the exact `--only` command to recompute it.
 | 13 | `alignement` | `alignement.csv`, `alignement_apparie.csv` | Does Euclidean alignment between sessions (He and Wu 2019) change decoding, against no compensation and Riemannian recentring? |
 | 14 | `fenetres` | `decodage_temporel*.csv` | Does a 2 s window dilute a brief event? 250 ms windows in 50 ms steps, temporal cluster permutation |
 | 15 | `erders` | `erders.csv`, `erders_clusters.csv` | Theta, mu, beta and low-gamma power change from the pre-go interval, articulated and imagined, spatial cluster permutation |
-| 16 | `grille` | `imagine_grille.csv` | Does a structured contrast emerge where the 15 words fail? |
-| 17 | `reconciliation` | `reconciliation_brut.csv`, `reconciliation_ica.csv` | Same models with and without ocular ICA |
-| 18 | `montages` | `emg_montages.csv` | Electrode subsets and supervised spatial filtering |
-| 19 | `apparies` | `paires_*.csv` | Which differences between configurations are real? |
-| 20 | `rsa` | `rsa_imagined.csv`, `rsa_articulated.csv`, `rsa_*_moyenne.csv` | Is there representational structure across word pairs, and is the mean crossnobis dissimilarity above its permutation null? |
-| 21 | `rang` | `rank_sweep.csv` | How does accuracy depend on the retained rank? |
-| 22 | `figures` | `figures/*.pdf` | The manuscript figures |
-| 23 | `tableau` | `tableau_configurations.csv`, `chiffres_manuscrit.csv` | Every configuration evaluated, and every number of the manuscript with its source |
+| 16 | `reseaux` | `reseaux.csv`, `reseaux_apparie.csv` | EEGNet-8,2 and ShallowConvNet (PyTorch, cropped training, GPU advised), paired against the fixed configuration |
+| 17 | `grille` | `imagine_grille.csv` | Does a structured contrast emerge where the 15 words fail? |
+| 18 | `reconciliation` | `reconciliation_brut.csv`, `reconciliation_ica.csv` | Same models with and without ocular ICA |
+| 19 | `montages` | `emg_montages.csv` | Electrode subsets and supervised spatial filtering |
+| 20 | `apparies` | `paires_*.csv` | Which differences between configurations are real? |
+| 21 | `rsa` | `rsa_imagined.csv`, `rsa_articulated.csv`, `rsa_*_moyenne.csv` | Is there representational structure across word pairs, and is the mean crossnobis dissimilarity above its permutation null? |
+| 22 | `rang` | `rank_sweep.csv` | How does accuracy depend on the retained rank? |
+| 23 | `figures` | `figures/*.pdf` | The manuscript figures |
+| 24 | `tableau` | `tableau_configurations.csv`, `chiffres_manuscrit.csv` | Every configuration evaluated, and every number of the manuscript with its source |
 
 **One archive, one execution.** Every decoding step uses the same epoch archive,
 chosen with `--archive` (default `brut`, without ocular ICA); the other archive
@@ -453,6 +455,8 @@ python scripts/16_euclidean_alignment.py --epochs epochs.npz --out results
 python scripts/17_erd_ers.py --epochs epochs.npz --flags results/essais.csv --out results
 # 18. Time-resolved decoding, 250 ms windows in 50 ms steps, temporal cluster permutation
 python scripts/18_time_resolved.py --epochs epochs.npz --out results
+# 19. EEGNet and ShallowConvNet, leave-one-session-out, paired against the fixed configuration
+python scripts/19_deep_networks.py --epochs epochs.npz --out results
 ```
 
 ### 6.1 Options of `01_build_epochs.py`
@@ -816,7 +820,7 @@ By construction, the following cannot leak:
 ## 12. Tests
 
 ```bash
-python tests/test_pipeline.py          # 42 tests, a few minutes
+python tests/test_pipeline.py          # 43 tests, a few minutes
 python tests/test_validation.py        # 8 tests of the technical validation and audio review
 python tests/test_high_frequency.py    # broadband analysis end to end, and its guard on 45 Hz archives
 python tests/test_notebook.py          # replays every run_all.py command on synthetic data (~8 min)

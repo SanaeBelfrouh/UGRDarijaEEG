@@ -4,5 +4,5 @@ scikit-learn>=1.3
 pandas>=2.0
 matplotlib>=3.7
 pyxdf>=1.16
-# optionnel : uniquement si des modeles profonds sont ajoutes
+# optionnel : etape 'reseaux' (EEGNet, ShallowConvNet) ; deja installe sur Kaggle
 # torch>=2.0

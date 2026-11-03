@@ -1103,3 +1103,36 @@ def test_temporal_cluster_test_finds_a_planted_effect():
     _, _, _, found = m.temporal_cluster_test(y, preds, groups, n_perm=200)
     sig = [(s, e) for s, e, _, p in found if p < 0.05]
     assert len(sig) == 1 and sig[0][0] <= 10 and sig[0][1] >= 14, found
+
+
+def test_deep_networks_learn_a_planted_signal():
+    """EEGNet et ShallowConvNet doivent retrouver un signal propre a chaque classe.
+
+    Controle positif de l'etape 19 : sans lui, un reseau au hasard sur la parole
+    imaginee ne dirait rien, il pourrait simplement ne pas apprendre.
+    """
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        return                                   # PyTorch est optionnel
+    from types import SimpleNamespace
+
+    m = _script("19_deep_networks.py")
+    rng = np.random.default_rng(0)
+    n, c, t, sf = 240, 8, 250, 125.0
+    y = np.repeat(np.arange(3), n // 3)
+    X = rng.normal(size=(n, c, t))
+    tt = np.arange(t) / sf
+    for k, f in enumerate((6.0, 11.0, 20.0)):    # une oscillation par classe sur deux canaux
+        X[y == k, k:k + 2] += 1.5 * np.sin(2 * np.pi * f * tt)
+    order = rng.permutation(n)
+    X, y = m.standardise_by_session(X[order], np.zeros(n)), y[order]
+    train = np.zeros(n, bool); train[:160] = True
+    val = np.zeros(n, bool); val[160:200] = True
+    test = ~(train | val)
+    args = SimpleNamespace(test_crops=5, max_epochs=25, batch_size=32, patience=8)
+    for name in ("eegnet", "shallowconvnet"):
+        proba, _ = m.train_and_predict(name, X, y, train, val, test, sf, 125, args, seed=0,
+                                       device="cpu")
+        acc = float(np.mean(proba.argmax(1) == y[test]))
+        assert acc > 0.8, f"{name} n'apprend pas un signal evident ({acc:.2f})"

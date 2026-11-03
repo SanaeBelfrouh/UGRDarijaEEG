@@ -602,6 +602,23 @@ def etape_erders(r: Runner) -> None:
           "--out", r.results, label="ERD/ERS — theta, mu, bêta, gamma bas", budget=False)
 
 
+def etape_reseaux(r: Runner) -> None:
+    """EEGNet et ShallowConvNet font-ils mieux que les représentations riemanniennes ?"""
+    if all((r.results / f).exists() for f in ("reseaux.csv", "reseaux_apparie.csv")):
+        print("réseaux déjà présents — étape sautée")
+        return
+    try:
+        import torch
+    except ImportError:
+        print("[SAUTE] reseaux : PyTorch absent (pip install torch)")
+        return
+    if not torch.cuda.is_available():
+        print("  attention : pas de GPU, l'étape tourne sur CPU et sera lente "
+              "(Kaggle : Settings -> Accelerator -> GPU)")
+    r.run("19_deep_networks.py", "--epochs", r.archive(), "--out", r.results,
+          label="RÉSEAUX PROFONDS — EEGNet et ShallowConvNet", budget=False)
+
+
 def etape_tableau(r: Runner) -> None:
     """Un tableau de toutes les configurations et des chiffres du manuscrit."""
     r.run("14_master_table.py", "--results", r.results,
@@ -639,6 +656,7 @@ ETAPES = (
     ("alignement",     etape_alignement,     "alignement euclidien entre sessions"),
     ("fenetres",       etape_fenetres,       "décodage en fenêtres de 250 ms"),
     ("erders",         etape_erders,         "ERD/ERS par bande et condition"),
+    ("reseaux",        etape_reseaux,        "EEGNet et ShallowConvNet (GPU conseillé)"),
     ("grille",         etape_grille,         "contrastes structurés"),
     ("reconciliation", etape_reconciliation, "avec et sans ICA"),
     ("montages",       etape_montages,       "dix électrodes contre soixante"),
@@ -700,6 +718,8 @@ ATTENDUS = (
     ("decodage_temporel_clusters.csv", "fenetres", "clusters temporels significatifs"),
     ("erders.csv", "erders", "ERD/ERS électrode par électrode"),
     ("erders_clusters.csv", "erders", "clusters spatiaux d'ERD/ERS"),
+    ("reseaux.csv", "reseaux", "EEGNet et ShallowConvNet sur les 15 mots"),
+    ("reseaux_apparie.csv", "reseaux", "réseaux contre la configuration fixe"),
     ("tableau_configurations.csv", "tableau", "chaque configuration évaluée"),
     ("chiffres_manuscrit.csv", "tableau", "chaque nombre du manuscrit et sa source"),
 )
