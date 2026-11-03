@@ -995,21 +995,6 @@ def test_electrode_positions_are_a_sane_head():
             f"{nom} devrait tomber hors du cercle de tete"
         )
 
-if __name__ == "__main__":
-    failures = 0
-    for name, fn in sorted(globals().items()):
-        if not name.startswith("test_"):
-            continue
-        try:
-            fn()
-            print(f"  PASS  {name}")
-        except AssertionError as exc:
-            failures += 1
-            print(f"  FAIL  {name}: {exc}")
-    print("\nechecs :", failures)
-    raise SystemExit(1 if failures else 0)
-
-
 def test_mean_dissimilarity_test_is_calibrated():
     """Le test de la dissimilarite moyenne : meme statistique que la RDM, nulle juste.
 
@@ -1136,3 +1121,87 @@ def test_deep_networks_learn_a_planted_signal():
                                        device="cpu")
         acc = float(np.mean(proba.argmax(1) == y[test]))
         assert acc > 0.8, f"{name} n'apprend pas un signal evident ({acc:.2f})"
+
+
+def test_release_changes_only_the_voice():
+    """Etape 20 : l'XDF publie ne differe de l'original que par la voix.
+
+    EEG, marqueurs et horodatages identiques au bit pres, meme taille de fichier ;
+    voix decalee (220 Hz -> 293,7 Hz pour +5 demi-tons) ; copie BIDS egale a
+    l'EEG a la precision du float32, chaque evenement sur l'echantillon que le
+    pipeline utilise. Saute si mne-bids ou librosa manquent (dependances de
+    publication, pas d'analyse).
+    """
+    try:
+        import librosa  # noqa: F401
+        import mne_bids  # noqa: F401
+    except ImportError:
+        return
+    import sys
+    import tempfile
+    import warnings
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from xdf_writer import write_xdf
+
+    m = _script("20_release.py")
+    rng = np.random.default_rng(0)
+    with tempfile.TemporaryDirectory() as tmp, warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tmp = Path(tmp)
+        sf, asr, T, t0 = 500.0, 16000.0, 12.0, 100.0
+        n, na = int(T * sf), int(T * asr)
+        eeg = rng.normal(0, 20, (n, 3)).astype(np.float32)
+        ta = np.arange(na) / asr
+        voice = (8000 * np.sin(2 * np.pi * 220 * ta) * ((ta % 3) < 1)).astype(np.int16)[:, None]
+        marks = ["articulated_start:lla", "articulated_end:lla",
+                 "articulated_start:dwa", "articulated_end:dwa"]
+        mstamps = t0 + np.array([0.5, 2.5, 3.5, 5.5])
+        src = tmp / "in" / "ses-S001" / "s.xdf"
+        src.parent.mkdir(parents=True)
+        write_xdf(src, [
+            dict(name="actiCHamp-1", type="EEG", format="float32", labels=["Fz", "Cz", "Oz"],
+                 srate=sf, data=eeg, stamps=t0 + np.arange(n) / sf),
+            dict(name="DarijaSpeechMarkers", type="Markers", format="string", labels=["m"],
+                 srate=0, data=marks, stamps=mstamps),
+            dict(name="AudioCaptureWin", type="Audio", format="int16", labels=["mic"],
+                 srate=asr, data=voice, stamps=t0 + 0.01 + ta),
+        ], chunk_size=777)
+        dst = tmp / "out" / "s.xdf"
+        summary = m.anonymise_xdf(src, dst, 5.0)
+        check = m.compare_xdf(src, dst)
+        assert all(check.values()), f"XDF publie different de l'original hors voix : {check}"
+        assert summary["audio_samples"] == na
+
+        import pyxdf
+        streams, _ = pyxdf.load_xdf(str(dst))
+        _, _, audio = m.find_streams(streams)
+        x = np.asarray(audio["time_series"], float).ravel()[: int(asr)]
+        f = np.fft.rfftfreq(len(x), 1 / asr)[np.argmax(np.abs(np.fft.rfft(x)))]
+        assert abs(f - 220 * 2 ** (5 / 12)) < 2, f"voix a {f:.1f} Hz au lieu de 293,7 Hz"
+
+        res = m.write_bids_session(dst, tmp / "bids", "01")
+        assert res["events_same_samples"], "evenements BIDS sur d'autres echantillons"
+        assert res["bids_max_abs_diff_uv"] <= res["bids_float32_tolerance_uv"], res
+
+        # le pipeline lit l'XDF publie comme l'original
+        from darija.io_xdf import load_session
+
+        e0 = load_session(src, conditions=("articulated",), session="S001")
+        e1 = load_session(dst, conditions=("articulated",), session="S001")
+        assert np.array_equal(e0.X, e1.X) and list(e0.y) == list(e1.y)
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if not name.startswith("test_"):
+            continue
+        try:
+            fn()
+            print(f"  PASS  {name}")
+        except AssertionError as exc:
+            failures += 1
+            print(f"  FAIL  {name}: {exc}")
+    print("\nechecs :", failures)
+    raise SystemExit(1 if failures else 0)

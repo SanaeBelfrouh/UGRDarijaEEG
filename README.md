@@ -265,12 +265,14 @@ UGRDarijaEEG/
 │   ├── 16_euclidean_alignment.py  Euclidean alignment between sessions
 │   ├── 17_erd_ers.py         ERD/ERS maps by band, spatial cluster permutation
 │   ├── 18_time_resolved.py   decoding in 250 ms sliding windows, temporal clusters
-│   └── 19_deep_networks.py   EEGNet and ShallowConvNet (PyTorch), cropped training
+│   ├── 19_deep_networks.py   EEGNet and ShallowConvNet (PyTorch), cropped training
+│   └── 20_release.py         published dataset: XDF with anonymised voice + BIDS copy, verified
 ├── tests/
-│   ├── test_pipeline.py      43 unit / integration tests (incl. positive & negative controls)
+│   ├── test_pipeline.py      44 unit / integration tests (incl. positive & negative controls)
 │   ├── test_notebook.py      replays every run_all.py command on synthetic data
 │   ├── test_validation.py    technical-validation checks on synthetic XDF streams
-│   └── synthetic.py          synthetic EEG generator used by the tests
+│   ├── synthetic.py          synthetic EEG generator used by the tests
+│   └── xdf_writer.py         minimal XDF writer, to test the release on synthetic files
 ├── notebooks/
 │   └── kaggle_run.ipynb      3-cell notebook: pre-flight, clone, run_all.py
 ├── docs/
@@ -457,6 +459,11 @@ python scripts/17_erd_ers.py --epochs epochs.npz --flags results/essais.csv --ou
 python scripts/18_time_resolved.py --epochs epochs.npz --out results
 # 19. EEGNet and ShallowConvNet, leave-one-session-out, paired against the fixed configuration
 python scripts/19_deep_networks.py --epochs epochs.npz --out results
+# 20. Published dataset (not part of run_all.py): copies each XDF with only the audio
+#     samples replaced by the voice shifted by 5 semitones (librosa), writes a BIDS copy
+#     (BrainVision float32 at the recorded rate, events.tsv on the samples the pipeline
+#     uses, anonymised WAV) and checks everything; needs mne, mne-bids and librosa
+python scripts/20_release.py --input /path/to/xdf --out /path/to/release
 ```
 
 ### 6.1 Options of `01_build_epochs.py`
@@ -820,7 +827,7 @@ By construction, the following cannot leak:
 ## 12. Tests
 
 ```bash
-python tests/test_pipeline.py          # 43 tests, a few minutes
+python tests/test_pipeline.py          # 44 tests, a few minutes
 python tests/test_validation.py        # 8 tests of the technical validation and audio review
 python tests/test_high_frequency.py    # broadband analysis end to end, and its guard on 45 Hz archives
 python tests/test_notebook.py          # replays every run_all.py command on synthetic data (~8 min)
@@ -896,10 +903,13 @@ the augmented signal at full size).
 
 ## 15. Data availability, ethics and citation
 
-**Data.** The raw recordings (XDF) are **not included** in this repository. The
-corpus will be deposited in a public repository upon publication of the
-associated article; until then, please contact the authors. All code needed to
-reproduce the analyses from the raw files is here.
+**Data.** The recordings are **not included** in this repository. They are
+deposited on the Open Science Framework (OSF), public on publication of the
+associated article: the eight XDF files with the voice anonymised by a fixed
+pitch shift of five semitones (EEG, markers and timestamps unchanged byte for
+byte, so every script here reads them as the originals), and a BIDS copy of the
+same data. `scripts/20_release.py` produced both and its `verification.csv`
+records the checks. Until then, please contact the authors.
 
 **Ethics.** The protocol was approved by the Comité de Ética en Investigación
 Humana of the Universidad de Granada (4210/CEIH/2024). Written informed consent

@@ -6,3 +6,7 @@ matplotlib>=3.7
 pyxdf>=1.16
 # optionnel : etape 'reseaux' (EEGNet, ShallowConvNet) ; deja installe sur Kaggle
 # torch>=2.0
+# optionnel : publication du jeu de donnees (scripts/20_release.py)
+# mne>=1.6
+# mne-bids>=0.15
+# librosa>=0.10
