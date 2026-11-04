@@ -756,6 +756,9 @@ def fig_robustesse(res: Path, out: Path) -> str | None:
         etiquettes.append(f"{len(g)} grid pipelines, range")
     ax.set(yticks=range(n), xlabel="balanced accuracy, fifteen imagined words",
            ylim=(-0.7, n - 0.3))
+    # en pourcentage comme le texte et les autres figures (les donnees restent des fractions)
+    from matplotlib.ticker import PercentFormatter
+    ax.xaxis.set_major_formatter(PercentFormatter(xmax=1, decimals=1))
     ax.set_yticklabels(list(reversed(etiquettes)))
     h, l = ax.get_legend_handles_labels()
     ax.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, -0.32 if n < 5 else -0.18),
@@ -793,6 +796,8 @@ def fig_temporel(res: Path, out: Path) -> str | None:
                     ax.axvspan(r.debut_s, r.fin_s, color=couleur, alpha=0.12 if not rec else 0.07, lw=0)
         ax.axvline(0.0, color="black", lw=0.8)
         ax.set_ylabel("balanced accuracy")
+        from matplotlib.ticker import PercentFormatter
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1, decimals=0))
         ax.annotate(cond, (0.01, 0.97), xycoords="axes fraction", va="top", fontsize=9)
     axes[-1, 0].set_xlabel("window centre (s), relative to the go signal")
     h, l = axes[0, 0].get_legend_handles_labels()
