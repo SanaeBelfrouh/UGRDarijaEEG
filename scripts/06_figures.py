@@ -747,8 +747,10 @@ def fig_robustesse(res: Path, out: Path) -> str | None:
         ax.plot(r.equilibree, y, "D" if fixe else "o", ms=7 if fixe else 6,
                 mfc=COULEURS["imagine"] if plein else "white", mec=COULEURS["imagine"],
                 mew=1.4, zorder=3)
+        # fond blanc : l'etiquette passe devant les lignes de bornes qu'elle croise
         ax.annotate(f"{100 * r.equilibree:.2f} %  (p = {r.p:.3f})", (r.equilibree, y),
-                    xytext=(8, 0), textcoords="offset points", va="center", fontsize=7.5)
+                    xytext=(8, 0), textcoords="offset points", va="center", fontsize=7.5,
+                    bbox=dict(boxstyle="square,pad=0.15", fc="white", ec="none"), zorder=4)
     etiquettes = [PROCEDURES.get(p_, p_) for p_ in lignes]
     if g is not None and len(g):
         ax.plot([g.equilibree.min(), g.equilibree.max()], [n - 1 - len(lignes)] * 2,
@@ -797,11 +799,19 @@ def fig_temporel(res: Path, out: Path) -> str | None:
         ax.axvline(0.0, color="black", lw=0.8)
         ax.set_ylabel("balanced accuracy")
         from matplotlib.ticker import PercentFormatter
-        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1, decimals=0))
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1, decimals=None))
         ax.annotate(cond, (0.01, 0.97), xycoords="axes fraction", va="top", fontsize=9)
     axes[-1, 0].set_xlabel("window centre (s), relative to the go signal")
     h, l = axes[0, 0].get_legend_handles_labels()
     vus = dict(zip(l, h))
+    # les deux styles de courbe valent pour les deux conditions : legende en gris
+    # neutre, et non dans la couleur de la premiere condition
+    from matplotlib.lines import Line2D
+    for marq, trait, nom in styles.values():
+        if nom in vus:
+            vus[nom] = Line2D([], [], marker=marq, ls=trait, ms=3, lw=1.1,
+                              color=COULEURS["neutre"],
+                              mfc="white" if trait == "--" else COULEURS["neutre"])
     fig.legend(vus.values(), vus.keys(), loc="lower center", ncol=3, frameon=False,
                bbox_to_anchor=(0.5, -0.04))
     fig.tight_layout(rect=(0, 0.07, 1, 1))
