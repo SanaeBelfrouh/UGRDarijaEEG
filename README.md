@@ -53,16 +53,18 @@ significance threshold is **7.63 %** and the smallest accuracy detectable with
 | Question | Answer |
 |---|---|
 | Does the pipeline detect a real signal? (positive control) | **Yes.** Articulated speech decodes at **30.5 %** across sessions and **43.3 %** within session — 4.6× and 6.5× chance, p < 0.001. |
-| Can the 15 *imagined* words be decoded? | **Barely.** Best result **8.18 %** (p = 0.005), i.e. exactly at the detectability bound. **0 of 32** configurations survive Holm correction. |
+| Can the 15 *imagined* words be decoded? | **Not beyond the resolution of the corpus.** The pipeline chosen by nested selection, which the test session never informs, reaches **7.62 %** (p = 0.056), just below the significance threshold. The best of 32 fixed configurations reaches 8.18 % (p = 0.006 uncorrected) but **0 of 32** survive Holm correction (best p<sub>Holm</sub> = 0.19). |
 | Is any method better than another on imagined speech? | **No.** **0 of 148** paired comparisons (same trials, 10 representations, 4 cross-validation schemes, with/without recentring) is significant. |
-| Do coarser contrasts (onset class, pharyngeal, semantic category, yes/no) do better? | **No.** None survives Holm correction; the nearest misses are the pharyngeal contrast (Holm p = 0.053) and the semantic category (Holm p = 0.079). |
-| Does a better pipeline break the imagined ceiling? | **No.** None of 36 candidate pipelines, selected by nested leave-one-session-out cross-validation without access to the test session, exceeds it. |
-| In which frequencies is the imagined information? | **26–45 Hz.** The imagined effect disappears below 26 Hz. Muscle activity above 55 Hz carries no word information in imagined trials, but a muscular contribution between 26 and 45 Hz cannot be excluded without EMG. |
-| Is articulated decoding cortical speech, or muscle? | **Largely peripheral (muscle).** Three independent controls converge (see [§9.4](#94-articulated-decoding-is-largely-peripheral)). |
-| Does the written cue contaminate imagined speech? | **No evidence of it.** The pre-production window is at chance, and the orthographic similarity model is flat (ρ = −0.03). |
+| Do coarser contrasts (onset class, pharyngeal, semantic category, yes/no) do better? | **No.** Across 220 configurations, one survives Holm correction in its family (onset class, 16.45 % against 14.29 % chance, p<sub>Holm</sub> = 0.035); it stays below its own detectability bound and falls to 14.61 % (p = 0.32) leave-one-session-out. |
+| Do deep networks do better? | **No.** EEGNet-8,2 and ShallowConvNet stay at chance on imagined speech (6.90 and 6.68 %); on articulated speech they reach 30.7 and 29.5 %, level with xDAWN. |
+| Does transfer from articulated speech help? | **No.** Articulated-to-imagined transfer reads imagined trials at 8.68 % (p<sub>Holm</sub> = 0.035) but does no better than imagined training, and it vanishes without the jaw ring or without the occipital electrodes. |
+| In which frequencies is the imagined information? | **26–45 Hz.** Below 26 Hz the fixed configuration falls to chance (6.79 %, p = 0.40). Muscle activity above 55 Hz carries no word information in imagined trials, but a muscular contribution between 26 and 45 Hz cannot be excluded without EMG. |
+| Is articulated decoding cortical speech, or muscle? | **Concurrent with production, with a large peripheral contribution likely.** It appears only during production, peaks over the jaw (FT9) and is decoded even by occipital electrodes; without electromyography, muscle and cortical motor activity cannot be separated (see [§9.4](#94-where-articulated-decoding-comes-from)). |
+| Does the written cue contaminate imagined speech? | **Cannot be excluded.** The orthographic similarity model is flat on imagined speech (ρ = −0.04), but the only imagined information resolved in time precedes the go signal, and one posterior electrode (PO4) decodes before production. |
 
-The full benchmark (13 steps) ran in **10.67 h** on a Kaggle CPU kernel and is
-reproduced by:
+The full benchmark (24 steps) runs in about 14 h on Kaggle (two sessions, the
+second resuming from the first's output; GPU needed only for the deep-network
+step) and is reproduced by:
 
 ```bash
 python scripts/run_all.py --input <folder containing the .xdf files> --work <working folder>
@@ -85,7 +87,7 @@ python scripts/run_all.py --input <folder containing the .xdf files> --work <wor
 | Trials recorded | 3600 (8 × 2 × 15 × 15) |
 | Trials retained | **3593** (1797 imagined, 1796 articulated; 0.2 % rejected) |
 | Trials per word | ≈ 120 per condition |
-| EEG system | Brain Products actiCHamp, 64 channels (FCz online reference) |
+| EEG system | Brain Products actiCHamp, actiCAP snap, 64 channels; ground hard-wired at Fpz; recording reference in the frontopolar region (exact position not documented); FCz is a data channel (channel 64) |
 | Original sampling rate | 1000 Hz (6 sessions), 500 Hz (2 sessions) |
 | Analysis sampling rate | 250 Hz (resampled) |
 | File format | XDF (Lab Streaming Layer), one file per session |
@@ -172,7 +174,7 @@ stored with every epoch, because one of the cross-validation schemes groups by
 ### 2.5 Timing verification
 
 Marker timing was verified before any signal analysis (`scripts/00_timing_check.py`,
-4501 markers per session):
+4531 to 4532 markers per session):
 
 | Interval | Median (s) | SD | Prescribed | Reading |
 |---|---:|---:|---|---|
@@ -202,7 +204,7 @@ any decoding, computed from the raw XDF of all 8 sessions):
 | Alpha peak (median spectrum) | 7.0–8.5 Hz in every session |
 | Line noise before filtering | 37–53 dB above its neighbourhood, removed by the notch filter |
 | Outlier channels (broadband power > 3 MAD) | 5–8 per session, all frontopolar / anterior frontal (Fp1, Fp2, AF3, AFz, AF4; sometimes AF7, AF8, F8); no central, parietal or occipital channel flagged |
-| Occipital evoked response to the written cue | P1 129–139 ms, N1 178–191 ms, P2 271–292 ms in all 8 sessions; peak GFP 5.2–12.1× baseline; odd/even split-half r = 0.89–0.99; between-session r = 0.83 |
+| Occipital evoked response to the written cue | P1 129–138 ms, N1 179–192 ms in all 8 sessions, P2 272–291 ms in six; peak GFP 5.2–12.1× baseline; odd/even split-half r = 0.89–0.99; between-session r = 0.83 |
 | Microphone level rise, production vs fixation | articulated median **+33.3 dB**, imagined median **0.0 dB** |
 | Imagined trials above the articulated range (5th percentile, 16.4 dB) | 26 of 1800 (1.4 %); 19 of them have a spectral centroid below 50 Hz (non-vocal sounds), the other 7 are kept for listening (`scripts/09_audio_review.py`) |
 | Acoustic onset of articulated speech | detected in 1781 of 1800 trials, median 630 ms after the go cue (IQR 530–750 ms) |
@@ -290,7 +292,7 @@ Every script and option is documented in English in this README, and
 
 ## 4. Installation
 
-Requirements: **Python ≥ 3.10** (tested with 3.11). No GPU is needed — nothing in
+Requirements: **Python ≥ 3.10** (tested with 3.11). No GPU is needed except for the optional deep-network step (`reseaux`) — nothing else in
 the pipeline uses one.
 
 ```bash
@@ -377,7 +379,7 @@ nested selection. The archive name is written to `results/run_manifest.json`, an
 results produced with another archive, or by a run older than this rule, are never
 reused. Every number of the manuscript therefore has a single value.
 
-Measured total before steps 3, 6, 9 and 10 were added: **10.67 h** on a Kaggle CPU kernel; the full run takes about 14 h, i.e. two Kaggle sessions (the second resumes from the first's output).
+The full run takes about 14 h, i.e. two Kaggle sessions (the second resumes from the first's output); the `reseaux` step takes about 35 min on a Kaggle GPU.
 
 ---
 
@@ -541,7 +543,7 @@ python scripts/20_release.py --input /path/to/xdf --out /path/to/release
 | `machoire10` | 10 | jaw ring, EMG control |
 | `occipital` | 8 | "plausible but off-topic" control |
 | `peripherique14` | 14 | peripheral electrodes (Muthukumaraswamy, 2013) |
-| `central` | 20 | central and frontal electrodes (FCz is the online reference, so 19 resolve) |
+| `central` | 20 | central and frontal electrodes (FCz is a data channel in the recordings) |
 | `sans_machoire` | 46 | full montage minus jaw and occiput |
 
 ---
@@ -631,42 +633,47 @@ a weak imagined result would be indistinguishable from a broken pipeline.
 
 | | Value |
 |---|---:|
-| Best result | **8.18 %** (`bankcov_tangent_lda`, LOSO, p = 0.0052) |
+| Nested selection (headline) | **7.62 %** (p = 0.056) |
+| Best fixed configuration | 8.18 % (`bankcov_tangent_lda`, LOSO, recentred, p = 0.006 uncorrected) |
 | Chance | 6.67 % |
 | Significance threshold | 7.63 % |
 | Detectability, 80 % power | 8.13 % |
 | Detectability, 95 % power | 8.60 % |
 | Configurations above the 80 % bound | 1 of 32 |
-| Configurations surviving Holm | **0 of 32** (best p<sub>Holm</sub> = 0.166) |
-| Significant paired comparisons | **0 of 148** (largest difference 1.2 pt, p = 0.0043 raw, 0.52 Holm) |
+| Configurations surviving Holm | **0 of 32** (best p<sub>Holm</sub> = 0.19) |
+| Significant paired comparisons | **0 of 148** (smallest p<sub>Holm</sub> = 0.17) |
 
-- The result is **identical with and without ICA ocular removal** (8.18 % in
+- The best result is the same with and without ICA ocular removal (8.18 % in
   both archives): ICA is a principled cleaning step, not a performance lever.
 - Ten representations perform alike; the differences between them are not
   resolvable with 1800 trials. This is a measurement, not a failure, and it is
   interpretable only because the positive control works.
 - For reference, reaching 80 % power on a true accuracy of 8 % would require
   ≈ 2300 trials (≈ 10 sessions); for 7.5 %, ≈ 5750 trials (≈ 26 sessions).
-- **The ceiling is not an artefact of the configurations tried.** Selecting the
-  pipeline among 36 candidates (preprocessing, filter bank, rank, Riemannian
-  geometry) by nested leave-one-session-out cross-validation, so that the test
-  session never informs the choice, does not exceed it.
-- Restricting the representations to frequencies below 26 Hz brings the
-  fifteen-word result to chance (6.8 %, p = 0.40).
+- **Selecting the pipeline does not raise the ceiling.** Choosing among 36
+  candidates (preprocessing, filter bank, rank, geometry) by nested
+  leave-one-session-out cross-validation, so that the test session never informs
+  the choice, gives 7.62 % (p = 0.056); the three best pipelines averaged, or
+  geometries using no statistic of the test session, give 7.29 %, and the search
+  below 30 Hz 7.17 % (none significant).
+- Restricting the fixed configuration to frequencies below 26 Hz brings the
+  fifteen-word result to chance (6.79 %, p = 0.40).
+- Excluding the 308 trials with a sound or a blink in the production window
+  lowers the configuration without recentring from 8.02 to 7.04 %, as much as
+  excluding the same number of random trials (7.00 % on average).
 
-> The nested-selection and frequency-restriction analyses of §9.2 are steps
-> `imbrique` and `controles` of `run_all.py` (scripts 13 and 12). The values in
-> this section come from earlier, separate runs and will be replaced by those of
-> the single execution.
+All values of this section come from the single execution (archive without ICA,
+1797 imagined trials), as do those of the paper.
 
 ### 9.3 Structured contrasts
 
 Grouping the fifteen words into fewer classes raises the number of trials per
 class and lowers the detectability bound. Across the configurations of five
 contrasts (word identity, onset class, pharyngeal /ʕ/, semantic category,
-yes/no), **none survives Holm correction**. Nearest misses: pharyngeal contrast
-(53.71 %, bound 53.11 %, p<sub>Holm</sub> = 0.053) and semantic category
-(19.39 % on 6 classes, bound 19.08 %, p<sub>Holm</sub> = 0.079).
+yes/no), 220 configurations in all, **one survives Holm correction** in its
+family of 44: onset class, 16.45 % against 14.29 % chance (p<sub>Holm</sub> =
+0.035). It stays below its own detectability bound, and falls to 14.61 %
+(p = 0.32) leave-one-session-out.
 
 A syllable-count contrast (one against two syllables) was evaluated in earlier
 runs and has been withdrawn: the syllabification of several words depends on
@@ -674,7 +681,7 @@ speech rate, and the contrast is confounded with word duration, written length
 and the pharyngeal. Testing such a contrast properly needs a classifier
 evaluated on words held out from training (leave-one-word-out).
 
-### 9.4 Articulated decoding is largely peripheral
+### 9.4 Where articulated decoding comes from
 
 Three controls, each immune to the failure mode of the others:
 
@@ -704,33 +711,29 @@ Three controls, each immune to the failure mode of the others:
 | articulated, occipital (8) | 8.91 % | 11.97 % | +3.06 pt | 0.0088 |
 | **imagined, full** | 6.62 % | 8.01 % | +1.38 pt | 0.78 (n.s.) |
 
-The articulated signal therefore looks like a **distinct physical phenomenon**,
-not a stronger version of the imagined cortical signal — which argues against
-expecting transfer from overt to imagined speech to inherit the articulated
-advantage. The jaw-ring electrodes never beat the full montage, which is
-expected: muscle activity volume-conducts, so **electrode-subset comparisons
-cannot serve as muscle controls**; a temporal control is needed.
+A signal that reaches almost every electrode, peaks over the jaw and appears
+only with production is consistent with a **large peripheral contribution**, but
+a diffuse map is also what volume conduction of a left-dominant cortical motor
+network would produce: without electromyography the two cannot be separated.
+What the corpus does show is that **electrode-subset comparisons cannot serve as
+muscle controls**, since occipital electrodes decode articulated words; a
+temporal control is needed, and a dedicated EMG derivation to go further.
 
 ### 9.5 Rank reduction acts as regularisation
 
-![Accuracy vs retained rank](docs/figures/rank_sweep.png)
+Imagined speech, 15 words, `bankcov_tangent_lda` without recentring, basis
+pooled across sessions:
 
-| Rank | Tangent dims | Sub-block grouped | LOSO |
-|---:|---:|---:|---:|
-| **8** | 144 | **8.29 %** | 7.23 % |
-| 16 | 544 | 7.96 % | — |
-| 24 | 1 200 | 8.13 % | — |
-| 32 | 2 112 | 7.46 % | **8.18 %** |
-| 40 | 3 280 | 7.73 % | 6.90 % |
-| 48 | 4 704 | 7.40 % | 6.29 % |
-| 56 | 6 384 | 7.29 % | 6.96 % |
-| 64 (full) | 8 320 | 7.07 % | 6.73 % |
+- grouped by sub-block, accuracy peaks at rank 8 (**8.35 %**), stays between
+  7.24 and 8.01 % from rank 16 to 40 and falls to 7.29 % at ranks 48 and 56;
+- leave-one-session-out, it falls from **8.02 %** at rank 32 to **7.29 %** at
+  full rank (7.46 % at rank 16).
 
-(Imagined speech, 15 words, `bankcov_tangent_lda`, basis pooled across sessions.)
-Accuracy declines above 24 components and reaches chance at full rank: the
-reduction acts as **regularisation**. Rank 32 is not the optimum, so accuracies
-at rank 32 should not be read as tuned. A basis pooled across sessions beat a
-per-session basis at every rank.
+The reduction acts as **regularisation**. Rank 32 is not the optimum, so
+accuracies at rank 32 should not be read as tuned; the rank was one of the
+choices offered to the nested selection. A basis pooled across sessions beat a
+per-session basis (for example 8.35 against 7.73 % at rank 8, sub-block
+grouping). Every rank and scheme is in `results/rank_sweep.csv`.
 
 ### 9.6 Representational similarity
 
@@ -740,34 +743,46 @@ order; Holm correction within condition. **Nothing is significant.**
 
 | Model | Imagined ρ | p (Holm) | Articulated ρ | p (Holm) |
 |---|---:|---:|---:|---:|
-| semantic category | +0.158 | 0.267 | +0.006 | 0.804 |
-| cue length | +0.148 | 0.629 | +0.118 | 0.738 |
-| pharyngeal presence | +0.128 | 0.629 | +0.131 | 0.645 |
-| onset class | +0.019 | 1.000 | +0.225 | 0.117 |
-| orthographic edit distance | −0.031 | 1.000 | +0.215 | 0.239 |
-| onset voicing | −0.054 | 1.000 | +0.080 | 0.738 |
+| semantic category | +0.165 | 0.204 | +0.009 | 0.578 |
+| cue length | +0.150 | 0.546 | +0.114 | 0.578 |
+| pharyngeal presence | +0.138 | 0.546 | +0.131 | 0.516 |
+| onset class | +0.009 | 1.000 | +0.215 | 0.127 |
+| orthographic edit distance | −0.038 | 1.000 | +0.214 | 0.202 |
+| onset voicing | −0.046 | 1.000 | +0.080 | 0.578 |
 
 - On imagined speech the orthographic model is flat and negative: no evidence
   that the written cue structures the imagined representation.
 - On articulated speech, onset class and orthographic distance are the largest
   correlations, but they cannot be separated here (in arabizi the first letter
   *is* the initial consonant; the two matrices correlate at ρ = 0.28).
-- Mean crossnobis dissimilarity is **+1.39** (imagined) versus **+20.43**
-  (articulated). The estimator is unbiased, so both conditions carry
-  word-distinguishing information — an order of magnitude apart.
+- The mean crossnobis dissimilarity, whose expectation is zero under the null,
+  exceeds its permutation null for articulated speech (**+20.26**, p = 0.005) but
+  not for imagined speech (**+1.24**, p = 0.20).
 
 ### 9.7 Summary
 
-> Articulated speech decodes at 30.5 % over 15 classes across sessions, but
-> three converging controls indicate that this performance is largely
-> peripheral. Imagined speech decodes at 8.2 % against 6.7 % chance; ten
-> representations and four validation schemes are indistinguishable from one
-> another, and the best result sits at the detectability bound of 1800 trials.
-> No pipeline selected without access to the test session exceeds that ceiling,
-> and no coarser contrast survives correction. The imagined effect lies at 26–45 Hz,
-> where a muscular contribution cannot be excluded without EMG. In the absence of any
+> Articulated speech decodes at 30.5 % over 15 classes across sessions, from
+> information concurrent with production and spread over the scalp, with a large
+> peripheral contribution that only electromyography could isolate. Imagined
+> speech is not decoded beyond the resolution limit of the corpus: the estimate
+> that pipeline selection does not inflate (7.62 %, p = 0.056) falls just short
+> of significance, no representation is distinguishable from another, deep
+> networks stay at chance, and training on articulated speech does not help.
+> Three apparently positive imagined-speech results (the best of 32
+> configurations, transfer from articulated speech, a time-resolved cluster)
+> each fail the control that should accompany them. In the absence of any
 > measure of compliance with the imagery task, all reported accuracies are lower
 > bounds.
+
+### 9.8 Further analyses
+
+| Analysis | Result |
+|---|---|
+| Euclidean alignment between sessions (He and Wu 2020) | Nothing on imagined speech (four models, 7.12–7.85 %, all paired p<sub>Holm</sub> = 1.0); +6.6 to +6.7 points on articulated speech, as much as Riemannian recentring |
+| Time-resolved decoding, 250 ms windows, temporal cluster permutation | Articulated words decoded from 0.08 to 1.52 s after the go signal (p = 0.001, peak 13.98 %); imagined words in no window of production, the only cluster preceding the go signal (−0.31 to −0.01 s, p = 0.038, with recentring) |
+| ERD/ERS, 0.4–1.9 s against the 500 ms before the go signal | Imagined: theta, mu and beta desynchronisation over most of the scalp (strongest in mu at C3/CP1, −1.28 dB), the same for all words; articulated: low-gamma increase (+0.55 dB over 41 electrodes) |
+| Transfer from articulated speech | 8.68 % (p<sub>Holm</sub> = 0.035), no better than imagined training; survives below 26 Hz, but not without the jaw ring (7.46 %) or without the occipital electrodes (7.39 %) |
+| EEGNet-8,2 and ShallowConvNet, cropped training | Imagined 6.90 and 6.68 % (chance); articulated 30.7 and 29.5 % |
 
 ---
 
@@ -893,9 +908,10 @@ the augmented signal at full size).
   in imagined trials, but a muscular contribution between 26 and 45 Hz cannot be
   excluded without electromyography.
 - **Written cue.** The cue was shown in arabizi (read automatically by the
-  participant, a daily user). The randomised ISI, the null pre-production
-  window, and the flat orthographic RSA model bound its effect; an auditory cue
-  is recommended for a future version of the protocol.
+  participant, a daily user). The randomised ISI and the flat orthographic RSA
+  model bound its effect, but the only imagined information resolved in time
+  precedes the go signal, so a contribution of the written cue cannot be
+  excluded; an auditory cue is recommended for a future version of the protocol.
 - **Single speaker.** Results require replication in other speakers before being
   treated as properties of Darija imagined speech.
 
@@ -918,8 +934,9 @@ was obtained from the participant.
 **Citation.** An article describing the corpus and the benchmark is in
 preparation:
 
-> Belfrouh, S., Salmam, F. Z., Errattahi, R., Ouellet, M., & Gonzalez-Lopez, J. A.
-> *DarijaEEG: The first EEG corpus of imagined and articulated speech in Moroccan
+> Belfrouh, S., Salmam, F. Z., Errattahi, R., Khanday, O. M., Ben Ticha, M. B.,
+> Ouellet, M., & Gonzalez-Lopez, J. A.
+> *DarijaEEG: An EEG corpus of imagined and articulated speech in Moroccan
 > Darija, with a reproducible decoding benchmark.* Manuscript in preparation.
 
 **Contact.** Sanae Belfrouh — LTI, ENSA El Jadida, Université Chouaïb Doukkali
