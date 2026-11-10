@@ -87,7 +87,7 @@ python scripts/run_all.py --input <folder containing the .xdf files> --work <wor
 | Trials recorded | 3600 (8 × 2 × 15 × 15) |
 | Trials retained | **3593** (1797 imagined, 1796 articulated; 0.2 % rejected) |
 | Trials per word | ≈ 120 per condition |
-| EEG system | Brain Products actiCHamp, actiCAP snap, 64 channels; ground hard-wired at Fpz; recording reference in the frontopolar region (exact position not documented); FCz is a data channel (channel 64) |
+| EEG system | Brain Products actiCHamp, actiCAP snap, 64 channels; ground at Fpz; FCz is recorded as a data channel; all analyses use the common average reference |
 | Original sampling rate | 1000 Hz (6 sessions), 500 Hz (2 sessions) |
 | Analysis sampling rate | 250 Hz (resampled) |
 | File format | XDF (Lab Streaming Layer), one file per session |

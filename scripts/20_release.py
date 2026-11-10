@@ -311,9 +311,9 @@ def eeg_sidecar(ses_label: str, sfreq: float) -> dict:
         "CapManufacturersModelName": "actiCAP snap, 64 channels",
         "SoftwareVersions": "BrainVision Recorder 1.20.0601; Lab Streaming Layer LabRecorder",
         "EEGPlacementScheme": "extended 10-20",
-        "EEGReference": ("recording reference in the frontopolar region, exact position "
-                         "not documented; FCz is a data channel (channel 64)"),
-        "EEGGround": "Fpz (hard-wired in the cap)",
+        "EEGReference": ("FCz is recorded as a data channel; the analyses use the "
+                         "common average reference"),
+        "EEGGround": "Fpz",
         "PowerLineFrequency": 50,
         "SoftwareFilters": "n/a",
         "RecordingType": "continuous",
