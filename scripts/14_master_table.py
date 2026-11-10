@@ -321,9 +321,9 @@ def chiffres(res: Path) -> pd.DataFrame:
         if t is None:
             continue
         for _, r in t.iterrows():
-            c.add("comparaisons appariees", f"{r.configuration_b} moins {r.configuration_a} : difference",
+            c.add("comparaisons appariees", f"{r.configuration_a} moins {r.configuration_b} : difference",
                   float(r.difference), name)
-            c.add("comparaisons appariees", f"{r.configuration_b} moins {r.configuration_a} : p apparie",
+            c.add("comparaisons appariees", f"{r.configuration_a} moins {r.configuration_b} : p apparie",
                   float(r.p_apparie), name)
     return pd.DataFrame(c.rows)
 
