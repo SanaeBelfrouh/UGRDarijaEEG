@@ -365,7 +365,7 @@ def write_bids_session(xdf_path: Path, root: Path, ses_label: str) -> dict:
             "StartTime": float(audio["time_stamps"][0] - stamps[0]),
             "StartTimeDescription": "seconds from the first EEG sample (LSL clocks synchronised)",
             "Device": "Audio-Technica AT2020USB-XP, LSL AudioCapture",
-            "Anonymisation": "fixed pitch shift with librosa (McFee et al. 2015); timing and level kept",
+            "Anonymisation": "fixed pitch shift with librosa (McFee et al. 2015); timing kept",
         }, indent=2))
 
     # relecture et controles

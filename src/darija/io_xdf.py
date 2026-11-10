@@ -61,7 +61,12 @@ def discover_xdf(root: str | Path) -> dict[str, Path]:
     found: dict[str, Path] = {}
     for path in sorted(root.rglob("*.xdf")):
         match = re.search(r"ses-(S\d+)", str(path))
-        found[match.group(1) if match else path.stem] = path
+        if match:
+            found[match.group(1)] = path
+            continue
+        # fichiers publies (nommage BIDS) : ses-01 ... ses-08 -> S001 ... S008
+        bids = re.search(r"ses-(\d+)", path.name)
+        found[f"S{int(bids.group(1)):03d}" if bids else path.stem] = path
     return found
 
 

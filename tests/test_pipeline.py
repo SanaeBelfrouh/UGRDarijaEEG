@@ -1192,6 +1192,23 @@ def test_release_changes_only_the_voice():
         assert np.array_equal(e0.X, e1.X) and list(e0.y) == list(e1.y)
 
 
+
+def test_published_xdf_names_map_to_sessions():
+    """Les XDF publies (sub-01_ses-01_task-...) sont lus comme S001 ... S008."""
+    import tempfile
+
+    from darija.io_xdf import discover_xdf
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        for name in ("orig/sub-P001/ses-S003/eeg/a.xdf",
+                     "pub/sourcedata/xdf/sub-01_ses-01_task-darijaspeech.xdf",
+                     "pub/sourcedata/xdf/sub-01_ses-08_task-darijaspeech.xdf"):
+            (tmp / name).parent.mkdir(parents=True, exist_ok=True)
+            (tmp / name).write_bytes(b"")
+        assert list(discover_xdf(tmp / "orig")) == ["S003"]
+        assert sorted(discover_xdf(tmp / "pub")) == ["S001", "S008"]
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
