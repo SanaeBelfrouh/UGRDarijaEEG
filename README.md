@@ -464,7 +464,7 @@ python scripts/19_deep_networks.py --epochs epochs.npz --out results
 # 20. Published dataset (not part of run_all.py): copies each XDF with only the audio
 #     samples replaced by the voice shifted by 5 semitones (librosa), writes a BIDS copy
 #     (BrainVision float32 at the recorded rate, events.tsv on the samples the pipeline
-#     uses, anonymised WAV) and checks everything; needs mne, mne-bids and librosa
+#     uses, anonymised WAV) and checks everything; needs mne, mne-bids, pybv and librosa
 python scripts/20_release.py --input /path/to/xdf --out /path/to/release
 ```
 

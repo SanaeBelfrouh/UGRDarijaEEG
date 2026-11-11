@@ -454,6 +454,14 @@ def main() -> int:
     p.add_argument("--license", default="CC-BY-4.0")
     p.add_argument("--sessions", nargs="*", default=None, help="S001 ... (defaut : toutes)")
     args = p.parse_args()
+    missing = []
+    for module, package in (("librosa", "librosa"), ("mne_bids", "mne-bids"), ("pybv", "pybv>=0.7.3")):
+        try:
+            __import__(module)
+        except ImportError:
+            missing.append(package)
+    if missing:
+        raise SystemExit("dependances de publication manquantes : pip install " + " ".join(missing))
     root = Path(args.out)
     if root.resolve() == Path(args.input).resolve():
         raise SystemExit("--out doit differer de --input : les originaux ne sont jamais modifies")

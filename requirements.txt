@@ -10,3 +10,4 @@ pyxdf>=1.16
 # mne>=1.6
 # mne-bids>=0.15
 # librosa>=0.10
+# pybv>=0.7.3
