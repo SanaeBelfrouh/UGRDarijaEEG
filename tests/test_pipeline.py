@@ -1137,6 +1137,7 @@ def test_release_changes_only_the_voice():
         import mne_bids  # noqa: F401
     except ImportError:
         return
+    import json
     import sys
     import tempfile
     import warnings
@@ -1180,9 +1181,39 @@ def test_release_changes_only_the_voice():
         f = np.fft.rfftfreq(len(x), 1 / asr)[np.argmax(np.abs(np.fft.rfft(x)))]
         assert abs(f - 220 * 2 ** (5 / 12)) < 2, f"voix a {f:.1f} Hz au lieu de 293,7 Hz"
 
+        # lecture directe des blocs = lecture pyxdf (valeurs et instants audio)
+        buf = np.fromfile(dst, dtype=np.uint8)
+        hdr = m.stream_headers(memoryview(buf))
+        sid = next(k for k, v in hdr.items() if v["type"] == "Audio")
+        raw_audio = m.read_values(buf, sid, 1, np.dtype("<i2"))
+        assert np.array_equal(raw_audio, np.asarray(audio["time_series"]).reshape(raw_audio.shape))
+        t_raw = m.stream_times(buf, sid, 1, 2, asr)
+        assert np.max(np.abs(t_raw - np.asarray(audio["time_stamps"]))) < 0.5 / asr
+
+        # la comparaison octet par octet voit tout changement hors des valeurs audio
+        bad = tmp / "out" / "bad.xdf"
+        corrupt = buf.copy()
+        eeg_sid = next(k for k, v in hdr.items() if v["type"] == "EEG")
+        first_eeg, _ = next(m.audio_value_runs(corrupt, eeg_sid, 3, 4))
+        corrupt[first_eeg[0]] ^= 1
+        corrupt.tofile(bad)
+        assert not m.compare_xdf(src, bad)["xdf_identical_outside_audio_values"]
+
         res = m.write_bids_session(dst, tmp / "bids", "01")
         assert res["events_same_samples"], "evenements BIDS sur d'autres echantillons"
         assert res["bids_max_abs_diff_uv"] <= res["bids_float32_tolerance_uv"], res
+
+        # evenements BIDS = echantillons du pipeline, qui lit tous les flux
+        import pandas as pd
+
+        full = pyxdf.load_xdf(str(dst), dejitter_timestamps=True)[0]
+        eeg_s, mk_s, _ = m.find_streams(full)
+        expected = m.marker_samples(np.asarray(eeg_s["time_stamps"]), np.asarray(mk_s["time_stamps"]))
+        ev = pd.read_csv(next((tmp / "bids").rglob("*_events.tsv")), sep="\t")
+        assert np.array_equal(ev["sample"].to_numpy(int), expected)
+        meta = json.loads(next((tmp / "bids").rglob("*_audio.json")).read_text())
+        start = float(audio["time_stamps"][0] - eeg_s["time_stamps"][0])
+        assert abs(meta["StartTime"] - start) < 0.5 / asr, (meta["StartTime"], start)
 
         # le pipeline lit l'XDF publie comme l'original
         from darija.io_xdf import load_session

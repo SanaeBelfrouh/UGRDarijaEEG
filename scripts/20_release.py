@@ -19,8 +19,9 @@ Ce que fait le script, session par session :
    l'audio anonymise en WAV a cote, avec son decalage par rapport au premier
    echantillon EEG. Les XDF anonymises sont places dans ``sourcedata/``.
 3. **Verification**, sans laquelle rien n'est declare publiable :
-   - XDF : EEG, marqueurs et horodatages relus identiques a l'original ; audio de
-     meme longueur et memes horodatages ; taille de fichier identique ;
+   - XDF : meme taille, et tous les octets identiques a l'original hors des valeurs
+     des echantillons audio (EEG, marqueurs, horodatages, decalages d'horloge et
+     en-tetes compris) ; voix effectivement modifiee ;
    - BIDS : EEG relu egal a l'XDF a la precision du float32 ; meme nombre
      d'evenements, chacun sur le meme echantillon ;
    - un rapport ``verification.csv`` par session.
@@ -28,6 +29,11 @@ Ce que fait le script, session par session :
 Pour tenir en memoire sur 45 min d'audio a 48 kHz, le decalage est applique par
 blocs d'environ 60 s, coupes dans un silence et raccordes par un fondu de 10 ms
 (voir ``pitch_shift``).
+
+L'audio n'est jamais relu par ``pyxdf`` : sa boucle echantillon par echantillon
+prend plus d'une heure par session pour 140 millions d'echantillons a 48 kHz. Les
+valeurs et les instants audio sont lus directement dans les blocs du fichier ;
+``pyxdf`` ne lit que l'EEG et les marqueurs, avec les options du pipeline.
 
 Nommage BIDS : ``sub-01``, sessions ``01`` a ``08`` (S001 a S008), une seule tache
 ``darijaspeech`` par session, puisque chaque fichier contient le bloc imagine puis
@@ -52,7 +58,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "src"))
 
 from darija.io_xdf import discover_xdf                                          # noqa: E402
-from darija.validation import channel_names, find_streams                       # noqa: E402
+from darija.validation import MARKER_STREAM, channel_names, find_streams        # noqa: E402
 
 TASK = "darijaspeech"
 SUBJECT = "01"
@@ -99,7 +105,8 @@ def stream_headers(buf: memoryview) -> dict[int, dict]:
 
         out[sid] = dict(name=field("name"), type=field("type"),
                         channel_count=int(field("channel_count", "0")),
-                        channel_format=field("channel_format"))
+                        channel_format=field("channel_format"),
+                        nominal_srate=float(field("nominal_srate", "0") or 0))
     return out
 
 
@@ -110,7 +117,8 @@ def audio_value_runs(buf: np.ndarray, sid: int, n_ch: int, itemsize: int):
     8][n_ch valeurs]``. LabRecorder n'horodate en general que le premier
     echantillon d'un bloc : les suivants ont un octet 0 et un pas constant, ce qui
     permet de traiter une serie entiere d'un coup. Renvoie, bloc par bloc, des
-    tableaux d'indices de debut des valeurs de chaque echantillon.
+    pour chaque bloc, le tableau des indices de debut des valeurs de chaque
+    echantillon et celui de ses horodatages (NaN quand l'echantillon n'en porte pas).
     """
     view = memoryview(buf)
     value_bytes = n_ch * itemsize
@@ -119,10 +127,12 @@ def audio_value_runs(buf: np.ndarray, sid: int, n_ch: int, itemsize: int):
             continue
         n, pos = _read_varlen(view, start + 4)
         offsets = np.empty(n, dtype=np.int64)
+        stamps = np.full(n, np.nan)
         i = 0
         while i < n:
             flag = buf[pos]
             if flag == 8:
+                stamps[i] = struct.unpack_from("<d", view, pos + 1)[0]
                 offsets[i] = pos + 9
                 pos += 9 + value_bytes
                 i += 1
@@ -139,13 +149,13 @@ def audio_value_runs(buf: np.ndarray, sid: int, n_ch: int, itemsize: int):
             i += run
         if pos != end:
             raise ValueError(f"bloc d'echantillons mal lu (fin {pos} au lieu de {end})")
-        yield offsets
+        yield offsets, stamps
 
 
 def read_values(buf: np.ndarray, sid: int, n_ch: int, dtype: np.dtype) -> np.ndarray:
     parts = []
     width = n_ch * dtype.itemsize
-    for offsets in audio_value_runs(buf, sid, n_ch, dtype.itemsize):
+    for offsets, _ in audio_value_runs(buf, sid, n_ch, dtype.itemsize):
         idx = offsets[:, None] + np.arange(width)
         parts.append(buf[idx].reshape(-1).view(dtype).reshape(-1, n_ch))
     return np.concatenate(parts) if parts else np.empty((0, n_ch), dtype)
@@ -155,12 +165,48 @@ def write_values(buf: np.ndarray, sid: int, n_ch: int, values: np.ndarray) -> No
     width = n_ch * values.dtype.itemsize
     raw = np.ascontiguousarray(values).view(np.uint8).reshape(len(values), width)
     k = 0
-    for offsets in audio_value_runs(buf, sid, n_ch, values.dtype.itemsize):
+    for offsets, _ in audio_value_runs(buf, sid, n_ch, values.dtype.itemsize):
         idx = offsets[:, None] + np.arange(width)
         buf[idx] = raw[k:k + len(offsets)]
         k += len(offsets)
     if k != len(values):
         raise ValueError(f"{k} echantillons ecrits sur {len(values)}")
+
+
+def clock_offsets(buf: np.ndarray, sid: int) -> tuple[np.ndarray, np.ndarray]:
+    """Mesures de decalage d'horloge (instant, decalage) du flux ``sid``."""
+    view = memoryview(buf)
+    times, values = [], []
+    for tag, start, _ in chunks(view):
+        if tag == 4 and struct.unpack_from("<I", view, start)[0] == sid:
+            t, o = struct.unpack_from("<dd", view, start + 4)
+            times.append(t)
+            values.append(o)
+    return np.asarray(times), np.asarray(values)
+
+
+def stream_times(buf: np.ndarray, sid: int, n_ch: int, itemsize: int, srate: float) -> np.ndarray:
+    """Instants des echantillons d'un flux regulier, comme ``pyxdf`` les donne.
+
+    Un echantillon sans horodatage suit le precedent de 1/srate ; une droite
+    ajustee sur les echantillons horodates retire la gigue (``dejitter``) ; le
+    decalage d'horloge, ajuste lineairement, ramene le tout sur l'horloge commune
+    (``synchronize_clocks``). Ecart a ``pyxdf`` : une fraction d'echantillon.
+    """
+    known = np.concatenate([st for _, st in audio_value_runs(buf, sid, n_ch, itemsize)])
+    idx = np.arange(len(known))
+    has = ~np.isnan(known)
+    if not has.any() or not has[0]:
+        raise ValueError("premier echantillon du flux sans horodatage")
+    slope, intercept = np.polyfit(idx[has], known[has], 1)
+    t = intercept + slope * idx
+    ct, co = clock_offsets(buf, sid)
+    if len(ct) >= 2:
+        b, a = np.polyfit(ct, co, 1)
+        t = t + a + b * t
+    elif len(ct) == 1:
+        t = t + co[0]
+    return t
 
 
 # --------------------------------------------------------------------------
@@ -235,20 +281,21 @@ def anonymise_xdf(src: Path, dst: Path, semitones: float) -> dict:
         raise SystemExit(f"{src.name} : format audio {h['channel_format']} non numerique")
     dtype = np.dtype(NUMERIC[h["channel_format"]])
     original = read_values(buf, sid, h["channel_count"], dtype)
+    sr = h["nominal_srate"]
+    astamps = stream_times(buf, sid, h["channel_count"], dtype.itemsize, sr)
 
     import pyxdf
-    streams, _ = pyxdf.load_xdf(str(src), dejitter_timestamps=True)
-    _, markers, aud = find_streams(streams)
-    if not np.array_equal(np.asarray(aud["time_series"]).reshape(original.shape), original):
-        raise SystemExit(f"{src.name} : lecture brute de l'audio differente de pyxdf")
-    sr = float(aud["info"]["nominal_srate"][0])
+    marker_ids = [k for k, v in headers.items() if v["name"] == MARKER_STREAM]
+    if len(marker_ids) != 1:
+        raise SystemExit(f"{src.name} : {len(marker_ids)} flux de marqueurs, 1 attendu")
+    streams, _ = pyxdf.load_xdf(str(src), select_streams=marker_ids, dejitter_timestamps=True)
+    markers = streams[0]
     shifted = pitch_shift(original, sr, semitones)
     write_values(buf, sid, h["channel_count"], shifted)
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_bytes(buf.tobytes())
 
     # niveau de la voix avant et apres, dans chaque fenetre de production articulee
-    astamps = np.asarray(aud["time_stamps"], float)
     change = []
     for value, t in zip(markers["time_series"], np.asarray(markers["time_stamps"], float)):
         value = str(value[0] if isinstance(value, (list, np.ndarray)) else value)
@@ -273,12 +320,19 @@ def anonymise_xdf(src: Path, dst: Path, semitones: float) -> dict:
 # BIDS
 # --------------------------------------------------------------------------
 
-def load_streams(path: Path):
-    """Flux EEG, marqueurs et audio, lus comme le pipeline les lit."""
+def load_eeg_markers(path: Path, headers: dict[int, dict]):
+    """Flux EEG et marqueurs, avec les options du pipeline (``load_session``).
+
+    ``pyxdf`` traite chaque flux independamment (dejitter, horloges) : ne pas lire
+    l'audio ne change ni les donnees ni les instants de l'EEG et des marqueurs.
+    """
     import pyxdf
 
-    streams, _ = pyxdf.load_xdf(str(path), dejitter_timestamps=True)
-    return find_streams(streams)
+    keep = [sid for sid, h in headers.items()
+            if not (h["type"].lower() == "audio" or "audio" in h["name"].lower())]
+    streams, _ = pyxdf.load_xdf(str(path), select_streams=keep, dejitter_timestamps=True)
+    eeg, markers, _ = find_streams(streams)
+    return eeg, markers
 
 
 def marker_samples(eeg_stamps: np.ndarray, marker_stamps: np.ndarray) -> np.ndarray:
@@ -328,7 +382,9 @@ def write_bids_session(xdf_path: Path, root: Path, ses_label: str) -> dict:
     from mne_bids.sidecar_updates import update_sidecar_json
     from scipy.io import wavfile
 
-    eeg, markers, audio = load_streams(xdf_path)
+    buf = np.fromfile(xdf_path, dtype=np.uint8)
+    headers = stream_headers(memoryview(buf))
+    eeg, markers = load_eeg_markers(xdf_path, headers)
     sfreq = float(eeg["info"]["nominal_srate"][0])
     names = channel_names(eeg)
     data_uv = np.asarray(eeg["time_series"], dtype=np.float32).T
@@ -353,16 +409,22 @@ def write_bids_session(xdf_path: Path, root: Path, ses_label: str) -> dict:
                         eeg_sidecar(ses_label, sfreq), verbose=False)
 
     # audio anonymise, a cote de l'EEG, avec son decalage dans le temps
-    if audio is not None:
-        a_sr = float(audio["info"]["nominal_srate"][0])
-        a = np.asarray(audio["time_series"])
+    audio = [(sid, h) for sid, h in headers.items()
+             if h["type"].lower() == "audio" or "audio" in h["name"].lower()]
+    if audio:
+        sid, h = audio[0]
+        a_sr = h["nominal_srate"]
+        dtype = np.dtype(NUMERIC[h["channel_format"]])
+        a = read_values(buf, sid, h["channel_count"], dtype)
+        a_t0 = float(stream_times(buf, sid, h["channel_count"], dtype.itemsize, a_sr)[0])
+        del buf
         beh = root / f"sub-{SUBJECT}" / f"ses-{ses_label}" / "beh"
         beh.mkdir(parents=True, exist_ok=True)
         stem = f"sub-{SUBJECT}_ses-{ses_label}_task-{TASK}_audio"
         wavfile.write(beh / f"{stem}.wav", int(round(a_sr)), a)
         (beh / f"{stem}.json").write_text(json.dumps({
             "SamplingFrequency": a_sr,
-            "StartTime": float(audio["time_stamps"][0] - stamps[0]),
+            "StartTime": a_t0 - float(stamps[0]),
             "StartTimeDescription": "seconds from the first EEG sample (LSL clocks synchronised)",
             "Device": "Audio-Technica AT2020USB-XP, LSL AudioCapture",
             "Anonymisation": "fixed pitch shift with librosa (McFee et al. 2015); timing kept",
@@ -389,25 +451,29 @@ def write_bids_session(xdf_path: Path, root: Path, ses_label: str) -> dict:
 # --------------------------------------------------------------------------
 
 def compare_xdf(original: Path, released: Path) -> dict:
-    import pyxdf
+    """Compare les deux XDF octet par octet.
 
-    a, _ = pyxdf.load_xdf(str(original), dejitter_timestamps=True)
-    b, _ = pyxdf.load_xdf(str(released), dejitter_timestamps=True)
-    ea, ma, aa = find_streams(a)
-    eb, mb, ab = find_streams(b)
-    va = [str(v[0]) if isinstance(v, (list, np.ndarray)) else str(v) for v in ma["time_series"]]
-    vb = [str(v[0]) if isinstance(v, (list, np.ndarray)) else str(v) for v in mb["time_series"]]
-    return dict(
-        xdf_same_size=original.stat().st_size == released.stat().st_size,
-        xdf_eeg_identical=bool(np.array_equal(np.asarray(ea["time_series"]),
-                                              np.asarray(eb["time_series"]))),
-        xdf_eeg_stamps_identical=bool(np.array_equal(ea["time_stamps"], eb["time_stamps"])),
-        xdf_markers_identical=bool(va == vb and np.array_equal(ma["time_stamps"],
-                                                               mb["time_stamps"])),
-        xdf_audio_stamps_identical=bool(np.array_equal(aa["time_stamps"], ab["time_stamps"])),
-        xdf_audio_changed=bool(not np.array_equal(np.asarray(aa["time_series"]),
-                                                  np.asarray(ab["time_series"]))),
-    )
+    Seules les valeurs des echantillons audio peuvent differer : tout autre octet
+    (EEG, marqueurs, horodatages, decalages d'horloge, en-tetes) doit etre
+    identique, ce qui garantit que tout lecteur d'XDF relit les memes EEG,
+    marqueurs et instants que dans l'original.
+    """
+    a = np.fromfile(original, dtype=np.uint8)
+    b = np.fromfile(released, dtype=np.uint8)
+    if len(a) != len(b):
+        return dict(xdf_same_size=False, xdf_identical_outside_audio_values=False,
+                    xdf_audio_changed=False)
+    mask = np.zeros(len(a), dtype=bool)
+    for sid, h in stream_headers(memoryview(a)).items():
+        if not (h["type"].lower() == "audio" or "audio" in h["name"].lower()):
+            continue
+        width = h["channel_count"] * np.dtype(NUMERIC[h["channel_format"]]).itemsize
+        for offsets, _ in audio_value_runs(a, sid, h["channel_count"], width // h["channel_count"]):
+            mask[(offsets[:, None] + np.arange(width)).ravel()] = True
+    diff = a != b
+    return dict(xdf_same_size=True,
+                xdf_identical_outside_audio_values=not bool(np.any(diff & ~mask)),
+                xdf_audio_changed=bool(np.any(diff & mask)))
 
 
 def dataset_files(root: Path, semitones: float, license_: str) -> None:
@@ -484,12 +550,14 @@ def main() -> int:
         row.update(compare_xdf(src, dst))
         row.update(write_bids_session(dst, root, label))
         row["seconds"] = round(time.time() - t0, 1)
-        ok = (row["xdf_same_size"] and row["xdf_eeg_identical"] and row["xdf_eeg_stamps_identical"]
-              and row["xdf_markers_identical"] and row["xdf_audio_stamps_identical"]
+        ok = (row["xdf_same_size"] and row["xdf_identical_outside_audio_values"]
               and row["xdf_audio_changed"] and row["events_same_samples"]
               and row["bids_max_abs_diff_uv"] <= row["bids_float32_tolerance_uv"])
         row["verifie"] = bool(ok)
         rows.append(row)
+        # rapport reecrit apres chaque session : un arret en cours de route garde
+        # la trace des sessions deja verifiees
+        pd.DataFrame(rows).to_csv(root / "verification.csv", index=False)
         print(f"{ses} -> ses-{label} : EEG {row['eeg_channels']} canaux a {row['eeg_sfreq']:g} Hz, "
               f"{row['markers']} marqueurs, audio {row['audio_samples']} echantillons "
               f"({100 * row['audio_values_changed']:.1f} % modifies, niveau de la voix "
