@@ -1187,6 +1187,9 @@ def test_release_changes_only_the_voice():
         sid = next(k for k, v in hdr.items() if v["type"] == "Audio")
         raw_audio = m.read_values(buf, sid, 1, np.dtype("<i2"))
         assert np.array_equal(raw_audio, np.asarray(audio["time_series"]).reshape(raw_audio.shape))
+        # parcours compile (numba) = parcours Python de secours
+        py = np.concatenate([o for o, _ in m._python_value_runs(buf, sid, 2)])
+        assert np.array_equal(py, m.sample_layout(buf, sid, 1, 2)[0])
         t_raw = m.stream_times(buf, sid, 1, 2, asr)
         assert np.max(np.abs(t_raw - np.asarray(audio["time_stamps"]))) < 0.5 / asr
 

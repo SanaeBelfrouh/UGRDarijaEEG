@@ -46,7 +46,9 @@ def write_xdf(path: str | Path, streams: list[dict], chunk_size: int = 500) -> N
     ``int16``, ``string``...), ``labels`` (noms de canaux), ``srate`` (0 pour un
     flux irregulier), ``data`` (tableau (n, canaux) ou liste de chaines) et
     ``stamps`` (n instants). Les echantillons sont ecrits par blocs de
-    ``chunk_size``, entrelaces entre flux, avec un decalage d'horloge nul.
+    ``chunk_size``, entrelaces entre flux, avec un decalage d'horloge nul. Un flux
+    regulier n'horodate que le premier echantillon de chaque bloc, sauf si
+    ``stamp_every`` (cle optionnelle) demande un horodatage tous les k echantillons.
     """
     out = bytearray(b"XDF:")
     out += _chunk(1, b'<?xml version="1.0"?><info><version>1.0</version></info>')
@@ -64,7 +66,7 @@ def write_xdf(path: str | Path, streams: list[dict], chunk_size: int = 500) -> N
             for i in range(p, p + n):
                 # comme LabRecorder : un flux regulier n'horodate que le premier
                 # echantillon du bloc, pyxdf deduit les suivants de la frequence
-                if i == p or not s["srate"]:
+                if i == p or not s["srate"] or (i - p) % s.get("stamp_every", n + 1) == 0:
                     body += bytes([8]) + struct.pack("<d", float(s["stamps"][i]))
                 else:
                     body += bytes([0])

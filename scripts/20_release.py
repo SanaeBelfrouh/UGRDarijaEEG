@@ -110,67 +110,163 @@ def stream_headers(buf: memoryview) -> dict[int, dict]:
     return out
 
 
-def audio_value_runs(buf: np.ndarray, sid: int, n_ch: int, itemsize: int):
-    """Positions des valeurs du flux ``sid``, par series d'echantillons contigus.
+def _python_value_runs(buf: np.ndarray, sid: int, value_bytes: int):
+    """Version Python de :func:`sample_layout`, bloc par bloc (sans numba).
 
-    Chaque echantillon est ``[octet d'horodatage (0 ou 8)][horodatage double si
-    8][n_ch valeurs]``. LabRecorder n'horodate en general que le premier
-    echantillon d'un bloc : les suivants ont un octet 0 et un pas constant, ce qui
-    permet de traiter une serie entiere d'un coup. Renvoie, bloc par bloc, des
-    pour chaque bloc, le tableau des indices de debut des valeurs de chaque
-    echantillon et celui de ses horodatages (NaN quand l'echantillon n'en porte pas).
+    Une serie d'echantillons de meme octet d'horodatage a un pas constant : elle
+    est lue d'un coup, avec une fenetre d'avance qui double.
     """
     view = memoryview(buf)
-    value_bytes = n_ch * itemsize
     for tag, start, end in chunks(view):
         if tag != 3 or struct.unpack_from("<I", view, start)[0] != sid:
             continue
         n, pos = _read_varlen(view, start + 4)
         offsets = np.empty(n, dtype=np.int64)
-        stamps = np.full(n, np.nan)
+        flags = np.zeros(n, dtype=bool)
         i = 0
         while i < n:
-            flag = buf[pos]
-            if flag == 8:
-                stamps[i] = struct.unpack_from("<d", view, pos + 1)[0]
-                offsets[i] = pos + 9
-                pos += 9 + value_bytes
-                i += 1
-                continue
-            if flag != 0:
+            flag = int(buf[pos])
+            if flag not in (0, 8):
                 raise ValueError(f"octet d'horodatage invalide ({flag}) a l'octet {pos}")
-            # serie d'echantillons sans horodatage : pas constant 1 + value_bytes
-            step = 1 + value_bytes
-            m = n - i
-            flags = buf[pos + step * np.arange(m)]
-            run = int(np.argmax(flags != 0)) if np.any(flags != 0) else m
-            offsets[i:i + run] = pos + 1 + step * np.arange(run)
+            step = 1 + flag + value_bytes
+            # chaque position testee est un vrai debut d'echantillon tant que les
+            # precedentes avaient le meme octet : le premier ecart est exact
+            run, look = 0, 64
+            while i + run < n:
+                m = min(look, n - i - run, (end - 1 - pos) // step + 1 - run)
+                if m <= 0:
+                    break
+                bad = np.flatnonzero(buf[pos + step * (run + np.arange(m))] != flag)
+                if bad.size:
+                    run += int(bad[0])
+                    break
+                run += m
+                look *= 2
+            if run == 0:
+                raise ValueError(f"bloc d'echantillons mal lu a l'octet {pos}")
+            offsets[i:i + run] = pos + 1 + flag + step * np.arange(run)
+            flags[i:i + run] = flag == 8
             pos += step * run
             i += run
         if pos != end:
             raise ValueError(f"bloc d'echantillons mal lu (fin {pos} au lieu de {end})")
-        yield offsets, stamps
+        yield offsets, flags
+
+
+try:                                   # parcours compile : quelques secondes par fichier
+    from numba import njit
+except ImportError:                    # pragma: no cover - repli Python
+    njit = None
+
+if njit is not None:
+    @njit(cache=False)
+    def _varlen(buf, p):
+        w = buf[p]
+        v = 0
+        for b in range(w):
+            v |= np.int64(buf[p + 1 + b]) << (8 * b)
+        return v, p + 1 + w, w
+
+    @njit(cache=False)
+    def _walk(buf, sid, value_bytes, offsets, flags):
+        """Parcourt tout le fichier ; remplit offsets/flags si non vides.
+
+        Renvoie le nombre d'echantillons du flux, ou -1 - position en cas d'erreur.
+        """
+        fill = offsets.shape[0] > 0
+        k = 0
+        pos = 4
+        n_buf = buf.shape[0]
+        while pos < n_buf:
+            length, p, w = _varlen(buf, pos)
+            if w != 1 and w != 4 and w != 8:
+                return -1 - pos
+            tag = np.int64(buf[p]) | (np.int64(buf[p + 1]) << 8)
+            start = p + 2
+            end = p + length
+            if tag == 3:
+                s = (np.int64(buf[start]) | (np.int64(buf[start + 1]) << 8)
+                     | (np.int64(buf[start + 2]) << 16) | (np.int64(buf[start + 3]) << 24))
+                if s == sid:
+                    n, q, w2 = _varlen(buf, start + 4)
+                    for _ in range(n):
+                        f = buf[q]
+                        if f == 8:
+                            if fill:
+                                offsets[k] = q + 9
+                                flags[k] = True
+                            q += 9 + value_bytes
+                        elif f == 0:
+                            if fill:
+                                offsets[k] = q + 1
+                            q += 1 + value_bytes
+                        else:
+                            return -1 - q
+                        k += 1
+                    if q != end:
+                        return -1 - q
+            pos = end
+        return k
+
+
+def sample_layout(buf: np.ndarray, sid: int, n_ch: int, itemsize: int) -> tuple[np.ndarray, np.ndarray]:
+    """Debut des valeurs de chaque echantillon du flux ``sid``, et ses horodatages.
+
+    Chaque echantillon est ``[octet d'horodatage (0 ou 8)][horodatage double si
+    8][n_ch valeurs]``. Le parcours est compile (numba) quand c'est possible : son
+    cout ne depend alors ni de la taille des blocs ni de la frequence des
+    horodatages. Les horodatages absents valent NaN.
+    """
+    value_bytes = n_ch * itemsize
+    if njit is not None:
+        buf = np.ascontiguousarray(buf, dtype=np.uint8)
+        empty_o, empty_f = np.empty(0, np.int64), np.empty(0, np.bool_)
+        n = _walk(buf, sid, value_bytes, empty_o, empty_f)
+        if n < 0:
+            raise ValueError(f"fichier XDF mal lu a l'octet {-1 - n}")
+        offsets, flags = np.empty(n, np.int64), np.zeros(n, np.bool_)
+        if _walk(buf, sid, value_bytes, offsets, flags) != n:
+            raise ValueError("relecture XDF incoherente")
+    else:
+        parts = list(_python_value_runs(buf, sid, value_bytes))
+        offsets = np.concatenate([o for o, _ in parts]) if parts else np.empty(0, np.int64)
+        flags = np.concatenate([f for _, f in parts]) if parts else np.empty(0, bool)
+    stamps = np.full(len(offsets), np.nan)
+    where = np.flatnonzero(flags)
+    for lo in range(0, len(where), 1 << 22):
+        sel = where[lo:lo + (1 << 22)]
+        raw = buf[(offsets[sel] - 8)[:, None] + np.arange(8)]
+        stamps[sel] = np.ascontiguousarray(raw).view("<f8").ravel()
+    return offsets, stamps
+
+
+def audio_value_runs(buf: np.ndarray, sid: int, n_ch: int, itemsize: int):
+    """Compatibilite : la disposition entiere, en un seul morceau."""
+    yield sample_layout(buf, sid, n_ch, itemsize)
+
+
+SLICE = 1 << 23                        # echantillons traites a la fois (memoire bornee)
 
 
 def read_values(buf: np.ndarray, sid: int, n_ch: int, dtype: np.dtype) -> np.ndarray:
-    parts = []
     width = n_ch * dtype.itemsize
-    for offsets, _ in audio_value_runs(buf, sid, n_ch, dtype.itemsize):
-        idx = offsets[:, None] + np.arange(width)
-        parts.append(buf[idx].reshape(-1).view(dtype).reshape(-1, n_ch))
-    return np.concatenate(parts) if parts else np.empty((0, n_ch), dtype)
+    offsets, _ = sample_layout(buf, sid, n_ch, dtype.itemsize)
+    out = np.empty((len(offsets), n_ch), dtype=dtype)
+    for lo in range(0, len(offsets), SLICE):
+        o = offsets[lo:lo + SLICE]
+        out[lo:lo + len(o)] = buf[o[:, None] + np.arange(width)].reshape(-1).view(dtype).reshape(-1, n_ch)
+    return out
 
 
 def write_values(buf: np.ndarray, sid: int, n_ch: int, values: np.ndarray) -> None:
     width = n_ch * values.dtype.itemsize
     raw = np.ascontiguousarray(values).view(np.uint8).reshape(len(values), width)
-    k = 0
-    for offsets, _ in audio_value_runs(buf, sid, n_ch, values.dtype.itemsize):
-        idx = offsets[:, None] + np.arange(width)
-        buf[idx] = raw[k:k + len(offsets)]
-        k += len(offsets)
-    if k != len(values):
-        raise ValueError(f"{k} echantillons ecrits sur {len(values)}")
+    offsets, _ = sample_layout(buf, sid, n_ch, values.dtype.itemsize)
+    if len(offsets) != len(values):
+        raise ValueError(f"{len(offsets)} echantillons dans le fichier, {len(values)} a ecrire")
+    for lo in range(0, len(offsets), SLICE):
+        o = offsets[lo:lo + SLICE]
+        buf[o[:, None] + np.arange(width)] = raw[lo:lo + len(o)]
 
 
 def clock_offsets(buf: np.ndarray, sid: int) -> tuple[np.ndarray, np.ndarray]:
@@ -193,7 +289,7 @@ def stream_times(buf: np.ndarray, sid: int, n_ch: int, itemsize: int, srate: flo
     decalage d'horloge, ajuste lineairement, ramene le tout sur l'horloge commune
     (``synchronize_clocks``). Ecart a ``pyxdf`` : une fraction d'echantillon.
     """
-    known = np.concatenate([st for _, st in audio_value_runs(buf, sid, n_ch, itemsize)])
+    _, known = sample_layout(buf, sid, n_ch, itemsize)
     idx = np.arange(len(known))
     has = ~np.isnan(known)
     if not has.any() or not has[0]:
@@ -468,8 +564,9 @@ def compare_xdf(original: Path, released: Path) -> dict:
         if not (h["type"].lower() == "audio" or "audio" in h["name"].lower()):
             continue
         width = h["channel_count"] * np.dtype(NUMERIC[h["channel_format"]]).itemsize
-        for offsets, _ in audio_value_runs(a, sid, h["channel_count"], width // h["channel_count"]):
-            mask[(offsets[:, None] + np.arange(width)).ravel()] = True
+        offsets, _ = sample_layout(a, sid, h["channel_count"], width // h["channel_count"])
+        for lo in range(0, len(offsets), SLICE):
+            mask[(offsets[lo:lo + SLICE, None] + np.arange(width)).ravel()] = True
     diff = a != b
     return dict(xdf_same_size=True,
                 xdf_identical_outside_audio_values=not bool(np.any(diff & ~mask)),
@@ -546,8 +643,15 @@ def main() -> int:
         t0 = time.time()
         dst = root / "sourcedata" / "xdf" / f"sub-{SUBJECT}_ses-{label}_task-{TASK}.xdf"
         row = dict(session=ses, bids_session=label, source=src.name)
+
+        def step(what: str) -> None:
+            print(f"  {ses} [{time.time() - t0:6.0f} s] {what}", flush=True)
+
+        step("anonymisation de la voix")
         row.update(anonymise_xdf(src, dst, args.semitones))
+        step("comparaison octet par octet avec l'original")
         row.update(compare_xdf(src, dst))
+        step("copie BIDS et relecture")
         row.update(write_bids_session(dst, root, label))
         row["seconds"] = round(time.time() - t0, 1)
         ok = (row["xdf_same_size"] and row["xdf_identical_outside_audio_values"]
