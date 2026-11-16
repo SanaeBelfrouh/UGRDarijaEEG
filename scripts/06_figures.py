@@ -798,8 +798,10 @@ def fig_temporel(res: Path, out: Path) -> str | None:
                     ax.axvspan(r.debut_s, r.fin_s, color=couleur, alpha=0.12 if not rec else 0.07, lw=0)
         ax.axvline(0.0, color="black", lw=0.8)
         ax.set_ylabel("balanced accuracy")
-        from matplotlib.ticker import PercentFormatter
-        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1, decimals=None))
+        # pourcentages entiers sur les deux panneaux (et non 14.0 % en haut, 8.00 % en bas)
+        from matplotlib.ticker import MultipleLocator, PercentFormatter
+        ax.yaxis.set_major_locator(MultipleLocator(0.02 if cond == "articulated" else 0.01))
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1, decimals=0))
         ax.annotate(cond, (0.01, 0.97), xycoords="axes fraction", va="top", fontsize=9)
     axes[-1, 0].set_xlabel("window centre (s), relative to the go signal")
     h, l = axes[0, 0].get_legend_handles_labels()
